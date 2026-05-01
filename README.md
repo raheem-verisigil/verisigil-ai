@@ -1,5 +1,7 @@
 # VeriSigil AI 🔐
 
+> 🚧 Actively building — updates coming weekly
+
 **The Trust Layer for Autonomous AI Agents**
 
 🌐 Website: https://www.verisigilai.com
