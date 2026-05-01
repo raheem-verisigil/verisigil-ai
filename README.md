@@ -3,7 +3,7 @@
 **The Trust Layer for Autonomous AI Agents**
 
 [![Website](https://img.shields.io/badge/Website-verisigilai.com-blue)](https://www.verisigilai.com)
-[![Stage](https://img.shields.io/badge/Stage-Early%20MVP-orange)]()
+[![Stage](https://img.shields.io/badge/Stage-Early%20MVP-orange)](https://github.com/yourusername/verisigil-ai)
 
 ---
 
@@ -77,4 +77,14 @@ We are building a **developer-friendly SDK** that integrates into any AI system 
 ## 🚀 Quick Start (Planned)
 
 ```bash
-npm install @verisigil/ai
+npm install @verisigil/aiimport { createAgent } from "@verisigil/ai";
+
+async function run() {
+  const agent = await createAgent({
+    name: "example-agent"
+  });
+
+  console.log(agent.did);
+}
+
+run();
