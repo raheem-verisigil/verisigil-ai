@@ -2,6 +2,10 @@
 
 **The Trust Layer for Autonomous AI Agents**
 
+🌐 Website: https://www.verisigilai.com
+
+**The Trust Layer for Autonomous AI Agents**
+
 ---
 
 ## 🚀 Overview
