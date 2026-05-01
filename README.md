@@ -122,7 +122,7 @@ If this project interests you:
 ## 🌐 Links
 
 - Website: https://www.verisigilai.com  
-- Contact: raheem@verisigil.ai  
+- Contact: raheem@verisigilai.com  
 
 ---
 
