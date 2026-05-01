@@ -127,7 +127,22 @@ console.log(verified ? '✅ Verified' : '⛔ NOT verified');
     "soc2":       false
   }
 }
-```
+```┌─────────────────────────────────────────────────────────────┐
+│                       YOUR AI AGENT                         │
+│              (LangChain / AutoGPT / OpenAI / etc.)          │
+└──────────────────────────┬──────────────────────────────────┘
+│  import verisigil
+▼
+┌─────────────────────────────────────────────────────────────┐
+│                    VERISIGIL AI SDK                         │
+├──────────────┬───────────────────┬──────────────────────────┤
+│  🔐 Identity │  🛡️ Security Scan │  ✅ Compliance Engine   │
+│  Passports   │  (Q2 2026)        │  (Post-Seed)            │
+│  [LIVE]      │                   │                          │
+├──────────────┴───────────────────┴──────────────────────────┤
+│  🧬 Behavioral Fingerprinting  │  🔗 Federated Trust Net   │
+│  (Q3 2026)                     │  (Post-Seed)              │
+└─────────────────────────────────────────────────────────────┘
 
 ---
 
