@@ -2,9 +2,6 @@
 
 **The Trust Layer for Autonomous AI Agents**
 
-[![Website](https://img.shields.io/badge/Website-verisigilai.com-blue)](https://www.verisigilai.com)
-[![Stage](https://img.shields.io/badge/Stage-Early%20MVP-orange)](https://github.com/yourusername/verisigil-ai)
-
 ---
 
 ## 🚀 Overview
@@ -38,7 +35,7 @@ AI agents today:
 
 ## 💡 Our Approach
 
-We are building a **developer-friendly SDK** that integrates into any AI system and provides:
+We are building a developer-friendly SDK that integrates into any AI system and provides:
 
 - Identity issuance (DID-based)  
 - Action verification  
@@ -88,3 +85,45 @@ async function run() {
 }
 
 run();
+---
+
+# 🟩 STEP 2 — NOW ADD YOUR SECTION (AT THE BOTTOM)
+
+After the last line (`run();`), press ENTER and paste this:
+
+---
+
+## ✅ PASTE THIS BELOW EVERYTHING
+
+```markdown
+---
+
+## 🤝 Contributing / Collaboration
+
+We are actively looking for:
+
+- Technical co-founders (AI / backend / security)
+- Early contributors
+- Developers interested in AI infrastructure
+
+If this project interests you:
+- Open an issue  
+- Suggest ideas  
+- Reach out directly  
+
+---
+
+## 🌐 Links
+
+- Website: https://www.verisigilai.com  
+- Contact: raheem@verisigil.ai  
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+**VeriSigil AI — Making AI systems trustworthy by default.**
