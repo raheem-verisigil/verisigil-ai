@@ -141,7 +141,8 @@ console.log(verified ? '✅ Verified' : '⛔ NOT verified');
 │  [LIVE]      │                   │                          │
 ├──────────────┴───────────────────┴──────────────────────────┤
 │  🧬 Behavioral Fingerprinting  │  🔗 Federated Trust Net   │
-│  (Q3 2026)                     │  (Post-Seed)              │  ---
+│  (Q3 2026)                     │  (Post-Seed)              │
+└─────────────────────────────────────────────────────────────┘---
 
 ## Current Status — Building in Public
 
@@ -247,7 +248,6 @@ Lagos · Dubai · London · EU
 ---
 
 *Star ⭐ this repo if you believe every AI agent should have a verified identity.*
-└─────────────────────────────────────────────────────────────┘
 
 ---
 
