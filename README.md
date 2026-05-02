@@ -1,5 +1,7 @@
 # VeriSigil AI 🔐
 
+[![CI/CD](https://github.com/raheem-verisigil/verisigil-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/raheem-verisigil/verisigil-ai/actions)
+
 **The Trust Layer for Autonomous AI Agents**
 
 [![CI](https://github.com/raheem-verisigil/verisigil-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/raheem-verisigil/verisigil-ai/actions)
