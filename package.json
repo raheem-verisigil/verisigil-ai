@@ -1,0 +1,28 @@
+{
+  "name": "@verisigil/sdk",
+  "version": "0.1.0",
+  "description": "Trust infrastructure for autonomous AI agents — identity, security, and compliance SDK",
+  "main": "js/src/index.js",
+  "scripts": {
+    "test": "node examples/javascript/quickstart.js",
+    "start": "node examples/javascript/quickstart.js"
+  },
+  "keywords": [
+    "ai", "security", "identity", "did", "cryptography",
+    "eu-ai-act", "compliance", "ai-agents", "llm-security",
+    "zero-trust", "ai-trust", "ai-identity", "autonomous-agents"
+  ],
+  "author": "Raheem Larry Babatunde <info@verisigilai.com>",
+  "license": "MIT",
+  "homepage": "https://www.verisigilai.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/raheem-verisigil/verisigil-ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/raheem-verisigil/verisigil-ai/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
