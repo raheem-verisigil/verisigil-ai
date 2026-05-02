@@ -1,4 +1,4 @@
-name: VeriSigil SDK CI
+name: VeriSigil AI CI/CD
 
 on:
   push:
