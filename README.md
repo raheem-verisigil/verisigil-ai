@@ -1,5 +1,15 @@
 # VeriSigil AI 🔐
 
+## 🚀 Try in 10 seconds
+
+1. Open: https://verisigil-api-production.up.railway.app/docs
+2. Click **POST /v1/passport/issue** → Try it out → Execute
+3. Copy your `agent_id` from the response
+4. Open: https://verisigil-api-production.up.railway.app/verify/YOUR_AGENT_ID
+5. See `"valid": true` — real Ed25519 cryptographic proof
+
+No account. No setup. No credit card.
+
 [![CI/CD](https://github.com/raheem-verisigil/verisigil-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/raheem-verisigil/verisigil-ai/actions)
 
 **The Trust Layer for Autonomous AI Agents**
