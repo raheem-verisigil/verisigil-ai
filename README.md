@@ -146,6 +146,31 @@ console.log(verified ? '✅ Verified' : '⛔ NOT verified');
 │  (Q3 2026)                     │  (Post-Seed)              │
 └─────────────────────────────────────────────────────────────┘---
 
+## 🔐 Live Verification — Try It Right Now
+
+Verify a real AI agent identity — no account needed:
+
+👉 https://verisigil-api-production.up.railway.app/verify/vsa_ce34b3771573
+
+See the W3C DID document:
+
+👉 https://verisigil-api-production.up.railway.app/did/vsa_ce34b3771573
+
+Issue your own agent passport:
+
+👉 https://verisigil-api-production.up.railway.app/docs
+
+What you will see:
+- `"valid": true` — passport is active
+- `"signature_valid": true` — Ed25519 cryptographic proof
+- `"signature_type": "Ed25519"` — FIPS standard
+- `"public_key"` — anyone can independently verify
+- `"did"` — W3C resolvable identifier
+
+This is real cryptographic identity. Not a simulation.
+
+---
+
 ## Current Status — Building in Public
 
 | Component | Status | Notes |
