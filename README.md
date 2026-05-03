@@ -1,27 +1,60 @@
 # VeriSigil AI 🔐 
 
-## 🔐 Live Example
+## 🔐 Live Example — Verify a Real Agent Right Now
 
-Agent ID: vsa_843cc558bae3  
-Verify: https://.../verify/vsa_843cc558bae3  
-DID: https://.../did/vsa_843cc558bae3  
-Audit: https://.../audit/vsa_843cc558bae3
+| | |
+|---|---|
+| **Agent ID** | `vsa_843cc558bae3` |
+| **Verify** | https://verisigil-api-production.up.railway.app/verify/vsa_843cc558bae3 |
+| **Audit Log** | https://verisigil-api-production.up.railway.app/v1/passport/vsa_843cc558bae3/audit |
+| **DID Document** | https://verisigil-api-production.up.railway.app/did/vsa_843cc558bae3 |
 
-## 🚀 Try in 10 seconds
+No account needed. Click any link above — it works right now.
+
+---
+
+## 🚀 Try in 10 Seconds
 
 1. Open: https://verisigil-api-production.up.railway.app/docs
-2. Click **POST /v1/passport/issue** → Try it out → Execute
+2. Click **POST /v1/passport/issue** → **Try it out** → **Execute**
 3. Copy your `agent_id` from the response
-4. Open: https://verisigil-api-production.up.railway.app/verify/YOUR_AGENT_ID
+4. Open: `https://verisigil-api-production.up.railway.app/verify/YOUR_AGENT_ID`
 5. See `"valid": true` — real Ed25519 cryptographic proof
 
 No account. No setup. No credit card.
+
+---
+ 
+ 
 
 [![CI/CD](https://github.com/raheem-verisigil/verisigil-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/raheem-verisigil/verisigil-ai/actions)
 
 **The Trust Layer for Autonomous AI Agents**
 
-[![CI](https://github.com/raheem-verisigil/verisigil-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/raheem-verisigil/verisigil-ai/actions)
+[![CI](htt## 🔐 Live Example — Verify a Real Agent Right Now
+
+| | |
+|---|---|
+| **Agent ID** | `vsa_843cc558bae3` |
+| **Verify** | https://verisigil-api-production.up.railway.app/verify/vsa_843cc558bae3 |
+| **Audit Log** | https://verisigil-api-production.up.railway.app/v1/passport/vsa_843cc558bae3/audit |
+| **DID Document** | https://verisigil-api-production.up.railway.app/did/vsa_843cc558bae3 |
+
+No account needed. Click any link above — it works right now.
+
+---
+
+## 🚀 Try in 10 Seconds
+
+1. Open: https://verisigil-api-production.up.railway.app/docs
+2. Click **POST /v1/passport/issue** → **Try it out** → **Execute**
+3. Copy your `agent_id` from the response
+4. Open: `https://verisigil-api-production.up.railway.app/verify/YOUR_AGENT_ID`
+5. See `"valid": true` — real Ed25519 cryptographic proof
+
+No account. No setup. No credit card.
+
+---ps://github.com/raheem-verisigil/verisigil-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/raheem-verisigil/verisigil-ai/actions)
 [![PyPI version](https://img.shields.io/badge/pypi-v0.1.0-blue)](https://pypi.org/project/verisigil/)
 [![npm version](https://img.shields.io/badge/npm-v0.1.0-red)](https://www.npmjs.com/package/@verisigil/sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
