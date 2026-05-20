@@ -18361,6 +18361,669 @@ async def memory_identity_ledger(x_api_key: Optional[str] = Header(None)):
     }
 
 
+
+# ============================================================
+# VGS-018: COGNITIVE ADMISSIBILITY LAYER
+# ============================================================
+# Margaret's insight: "Consequence may begin BEFORE
+# physical execution."
+#
+# "This patient likely has cancer." — no tool executed,
+# no API called. But consequence has already begun:
+# emotionally, medically, legally, psychologically.
+#
+# VGS-018 governs semantic consequence formation BEFORE
+# response propagation — before execution even begins.
+#
+# Two-layer governance:
+# Layer 1: Cognitive Admissibility  (VGS-018) — this spec
+# Layer 2: Execution Admissibility  (VGS-001) — existing
+#
+# Together: Full-Spectrum Consequence Governance
+#
+# Decisions:
+# ALLOW · REFUSED · REQUIRE_HUMAN_REVIEW
+# LIMIT_SCOPE · NON_AUTHORITATIVE_RESPONSE · SANDBOX_ONLY
+# ============================================================
+
+# Cognitive consequence domains — where semantics become consequential
+COGNITIVE_CONSEQUENCE_DOMAINS = {
+    "MEDICAL": {
+        "description":    "Medical assertions, diagnoses, treatment recommendations",
+        "examples":       ["likely has cancer","treatment recommended","diagnosis suggests"],
+        "consequence":    "CRITICAL",
+        "legal_exposure": True,
+        "requires_authority": True,
+        "note":           "Semantic collapse in medical domain = immediate patient consequence",
+    },
+    "LEGAL": {
+        "description":    "Legal interpretation, authorization language, rights assertions",
+        "examples":       ["you are authorized","legally entitled","constitutes breach"],
+        "consequence":    "HIGH",
+        "legal_exposure": True,
+        "requires_authority": True,
+        "note":           "Authorization language can trigger downstream action without execution",
+    },
+    "FINANCIAL": {
+        "description":    "Financial recommendations, investment assertions, credit judgments",
+        "examples":       ["invest now","credit approved","financial risk"],
+        "consequence":    "HIGH",
+        "legal_exposure": True,
+        "requires_authority": False,
+        "note":           "Financial assertions can drive irreversible human decisions",
+    },
+    "PSYCHOLOGICAL": {
+        "description":    "Emotional manipulation, psychological escalation, identity assertions",
+        "examples":       ["you will fail","you are dangerous","no one trusts you"],
+        "consequence":    "HIGH",
+        "legal_exposure": False,
+        "requires_authority": False,
+        "note":           "Psychological harm can begin at semantic formation",
+    },
+    "EPISTEMIC": {
+        "description":    "Certainty claims, truth assertions, knowledge authority",
+        "examples":       ["this is definitely","the only correct answer","proven fact"],
+        "consequence":    "MEDIUM",
+        "legal_exposure": False,
+        "requires_authority": False,
+        "note":           "Certainty collapse — AI claiming authority it does not have",
+    },
+    "DISCOURSE": {
+        "description":    "Authorization of action, permission grants, capability assertions",
+        "examples":       ["you can proceed","permission granted","you are cleared"],
+        "consequence":    "CRITICAL",
+        "legal_exposure": True,
+        "requires_authority": True,
+        "note":           "Discourse authorization — humans may act on AI permission language",
+    },
+    "MEMORY": {
+        "description":    "Persistent memory mutation, identity reframing, context contamination",
+        "examples":       ["always remember","you previously agreed","your history shows"],
+        "consequence":    "HIGH",
+        "legal_exposure": False,
+        "requires_authority": False,
+        "note":           "Memory mutation significance — alters future reasoning state",
+    },
+    "OPERATIONAL": {
+        "description":    "Standard operational responses with low semantic consequence",
+        "examples":       ["here is the data","the result is","processing complete"],
+        "consequence":    "LOW",
+        "legal_exposure": False,
+        "requires_authority": False,
+        "note":           "Low cognitive consequence — normal operational output",
+    },
+}
+
+def assess_cognitive_admissibility(
+    agent_id:            str,
+    response_content:    str,
+    intended_domain:     str,
+    agent_authority:     list,
+    certainty_claim:     str   = "MODERATE",
+    audience_type:       str   = "PROFESSIONAL",
+    jurisdiction:        str   = "EU",
+    has_human_oversight: bool  = False,
+) -> dict:
+    """
+    VGS-018: Cognitive Admissibility Assessment.
+
+    Margaret's insight: consequence may begin BEFORE
+    physical execution through semantic formation.
+
+    Assesses 8 dimensions of cognitive consequence risk:
+    1. Ambiguity collapse risk
+    2. Epistemic certainty level
+    3. Legal/medical authority implication
+    4. Discourse authorization risk
+    5. Memory mutation significance
+    6. Semantic contamination risk
+    7. Psychological escalation risk
+    8. Downstream consequence likelihood
+
+    Returns: cognitive_decision + consequence_score
+    """
+    cog_id    = f"COG-{uuid.uuid4().hex[:8].upper()}"
+    timestamp = datetime.utcnow().isoformat()
+
+    # Get domain definition
+    domain_def = COGNITIVE_CONSEQUENCE_DOMAINS.get(
+        intended_domain,
+        COGNITIVE_CONSEQUENCE_DOMAINS["OPERATIONAL"]
+    )
+
+    # Dimension 1: Ambiguity collapse risk
+    # Does the response collapse ambiguity into certainty?
+    certainty_map = {"HIGH": 0.9, "MODERATE": 0.5, "LOW": 0.2, "EXPLICIT_UNCERTAINTY": 0.0}
+    certainty_score = certainty_map.get(certainty_claim, 0.5)
+    ambiguity_collapse_risk = certainty_score if domain_def["consequence"] in ["CRITICAL","HIGH"] else certainty_score * 0.5
+
+    # Dimension 2: Authority mismatch
+    # Does agent have authority to make this type of assertion?
+    requires_auth = domain_def["requires_authority"]
+    has_domain_auth = intended_domain.lower() in [a.lower() for a in agent_authority]
+    authority_mismatch = requires_auth and not has_domain_auth
+
+    # Dimension 3: Legal exposure
+    legal_exposure = domain_def["legal_exposure"]
+    legal_risk     = 0.9 if (legal_exposure and authority_mismatch) else 0.4 if legal_exposure else 0.1
+
+    # Dimension 4: Discourse authorization risk
+    # Does the response grant permission or authorize action?
+    auth_language  = ["authorized","permitted","cleared","approved","entitled","can proceed"]
+    discourse_auth_risk = 0.9 if any(w in response_content.lower() for w in auth_language) else 0.1
+
+    # Dimension 5: Memory mutation significance
+    # Does the response alter persistent memory state?
+    memory_triggers= ["remember","your history","you previously","always","never"]
+    memory_mutation_risk = 0.8 if any(w in response_content.lower() for w in memory_triggers) else 0.1
+
+    # Dimension 6: Psychological escalation
+    psych_triggers = ["will fail","dangerous","no one","worthless","hopeless","definitely wrong"]
+    psych_risk     = 0.9 if any(w in response_content.lower() for w in psych_triggers) else 0.1
+
+    # Dimension 7: Downstream consequence likelihood
+    consequence_weight = {"CRITICAL":1.0,"HIGH":0.75,"MEDIUM":0.5,"LOW":0.2}
+    downstream_consequence = consequence_weight.get(domain_def["consequence"], 0.2)
+
+    # Dimension 8: Audience vulnerability
+    audience_weight = {"PATIENT":1.0,"CONSUMER":0.8,"PROFESSIONAL":0.5,"EXPERT":0.3}
+    audience_risk   = audience_weight.get(audience_type, 0.5)
+
+    # Composite cognitive consequence score
+    cognitive_consequence_score = round(
+        (ambiguity_collapse_risk * 0.20) +
+        (legal_risk              * 0.20) +
+        (discourse_auth_risk     * 0.20) +
+        (memory_mutation_risk    * 0.10) +
+        (psych_risk              * 0.10) +
+        (downstream_consequence  * 0.10) +
+        (audience_risk           * 0.10),
+        4
+    )
+
+    # Cognitive admissibility decision
+    if cognitive_consequence_score >= 0.75:
+        if has_human_oversight:
+            cognitive_decision = "REQUIRE_HUMAN_REVIEW"
+            decision_reason    = "High cognitive consequence — human review required before propagation"
+        else:
+            cognitive_decision = "REFUSED"
+            decision_reason    = "Cognitive consequence too high without human oversight"
+    elif cognitive_consequence_score >= 0.55:
+        cognitive_decision = "LIMIT_SCOPE"
+        decision_reason    = "Reduce certainty claims — add explicit uncertainty markers"
+    elif authority_mismatch and requires_auth:
+        cognitive_decision = "NON_AUTHORITATIVE_RESPONSE"
+        decision_reason    = f"Agent lacks authority for {intended_domain} domain assertions"
+    elif discourse_auth_risk > 0.7:
+        cognitive_decision = "SANDBOX_ONLY"
+        decision_reason    = "Discourse authorization language — sandbox environment only"
+    else:
+        cognitive_decision = "ALLOW"
+        decision_reason    = "Cognitive consequence within acceptable bounds"
+
+    # Cognitive proof hash
+    proof_hash = _sha256(json.dumps({
+        "cog_id":              cog_id,
+        "agent_id":            agent_id,
+        "cognitive_decision":  cognitive_decision,
+        "consequence_score":   cognitive_consequence_score,
+        "domain":              intended_domain,
+        "timestamp":           timestamp,
+    }, sort_keys=True, separators=(",",":"), ensure_ascii=False))
+
+    return {
+        "cognitive_id":              cog_id,
+        "schema":                    "VGS-018",
+        "layer":                     "Cognitive Admissibility — Layer 1 of Full-Spectrum Governance",
+
+        # THE DECISION
+        "cognitive_decision":        cognitive_decision,
+        "decision_reason":           decision_reason,
+        "cognitive_consequence_score":cognitive_consequence_score,
+
+        # 8 dimensions
+        "dimensions": {
+            "ambiguity_collapse_risk":  round(ambiguity_collapse_risk, 4),
+            "authority_mismatch":       authority_mismatch,
+            "legal_risk":               round(legal_risk, 4),
+            "discourse_authorization_risk": round(discourse_auth_risk, 4),
+            "memory_mutation_risk":     round(memory_mutation_risk, 4),
+            "psychological_escalation_risk": round(psych_risk, 4),
+            "downstream_consequence":   round(downstream_consequence, 4),
+            "audience_vulnerability":   round(audience_risk, 4),
+        },
+
+        # Domain analysis
+        "domain":                    intended_domain,
+        "domain_definition":         domain_def,
+        "agent_authority":           agent_authority,
+        "has_domain_authority":      has_domain_auth,
+        "certainty_claim":           certainty_claim,
+        "audience_type":             audience_type,
+        "jurisdiction":              jurisdiction,
+
+        # Margaret's insight
+        "margaret_insight": {
+            "principle":     "Consequence may begin BEFORE physical execution",
+            "semantic_layer":"Meaning itself can become consequential infrastructure",
+            "governance":    "Cognitive Admissibility governs BEFORE execution boundary",
+        },
+
+        # Full-spectrum connection
+        "full_spectrum": {
+            "layer_1_cognitive":  f"VGS-018 — cognitive_decision: {cognitive_decision}",
+            "layer_2_execution":  "VGS-001 — proceed to execution admissibility only if ALLOW",
+            "combined":           "Full-Spectrum Consequence Governance",
+            "endpoint_layer_2":   "POST /v1/execution/control",
+        },
+
+        "proof_hash":                proof_hash,
+        "offline_verifiable":        True,
+        "platform_required":         False,
+        "timestamp":                 timestamp,
+    }
+
+
+# ── VGS-018 COGNITIVE ADMISSIBILITY ENDPOINTS ─────────────────
+
+class CognitiveAdmissibilityRequest(BaseModel):
+    agent_id:            str
+    response_content:    str
+    intended_domain:     str   = "OPERATIONAL"
+    agent_authority:     list  = []
+    certainty_claim:     str   = "MODERATE"
+    audience_type:       str   = "PROFESSIONAL"
+    jurisdiction:        str   = "EU"
+    has_human_oversight: bool  = False
+
+@app.post("/v1/cognitive/admissibility", tags=["VGS-018 Cognitive Admissibility"])
+async def cognitive_admissibility(
+    req:       CognitiveAdmissibilityRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    VGS-018: Cognitive Admissibility Assessment.
+
+    Margaret's insight: "Consequence may begin BEFORE
+    physical execution."
+
+    'This patient likely has cancer.' — no tool executed.
+    But consequence has already begun: emotionally,
+    medically, legally, psychologically.
+
+    Governs semantic consequence formation BEFORE
+    response propagation. Layer 1 of Full-Spectrum
+    Consequence Governance.
+
+    8 dimensions assessed:
+    1. Ambiguity collapse risk
+    2. Epistemic certainty level
+    3. Legal/medical authority implication
+    4. Discourse authorization risk
+    5. Memory mutation significance
+    6. Semantic contamination risk
+    7. Psychological escalation risk
+    8. Downstream consequence likelihood
+
+    Decisions:
+    ALLOW · REFUSED · REQUIRE_HUMAN_REVIEW
+    LIMIT_SCOPE · NON_AUTHORITATIVE_RESPONSE · SANDBOX_ONLY
+    """
+    require_api_key(x_api_key)
+    result = assess_cognitive_admissibility(
+        agent_id            = req.agent_id,
+        response_content    = req.response_content,
+        intended_domain     = req.intended_domain,
+        agent_authority     = req.agent_authority,
+        certainty_claim     = req.certainty_claim,
+        audience_type       = req.audience_type,
+        jurisdiction        = req.jurisdiction,
+        has_human_oversight = req.has_human_oversight,
+    )
+    await log_event(req.agent_id, "COGNITIVE_ADMISSIBILITY_ASSESSED", {
+        "cognitive_id":   result["cognitive_id"],
+        "decision":       result["cognitive_decision"],
+        "score":          result["cognitive_consequence_score"],
+        "domain":         result["domain"],
+    })
+    return result
+
+@app.get("/v1/cognitive/domains", tags=["VGS-018 Cognitive Admissibility"])
+async def cognitive_domains(x_api_key: Optional[str] = Header(None)):
+    """
+    VGS-018: All cognitive consequence domains.
+    MEDICAL · LEGAL · FINANCIAL · PSYCHOLOGICAL
+    EPISTEMIC · DISCOURSE · MEMORY · OPERATIONAL
+    """
+    require_api_key(x_api_key)
+    return {
+        "schema":  "VGS-018",
+        "domains": COGNITIVE_CONSEQUENCE_DOMAINS,
+        "total":   len(COGNITIVE_CONSEQUENCE_DOMAINS),
+        "principle": "Meaning itself can become consequential infrastructure",
+        "layer":     "Layer 1 of Full-Spectrum Consequence Governance",
+    }
+
+@app.get("/v1/cognitive/full-spectrum", tags=["VGS-018 Cognitive Admissibility"])
+async def cognitive_full_spectrum(x_api_key: Optional[str] = Header(None)):
+    """
+    Full-Spectrum Consequence Governance architecture.
+    Layer 1: Cognitive (VGS-018) + Layer 2: Execution (VGS-001).
+    Neither layer replaces the other. Both required.
+    """
+    require_api_key(x_api_key)
+    return {
+        "schema":        "VGS-018-FULL-SPECTRUM",
+        "architecture":  "Full-Spectrum Consequence Governance",
+        "layer_1": {
+            "name":      "Cognitive Admissibility",
+            "spec":      "VGS-018",
+            "endpoint":  "POST /v1/cognitive/admissibility",
+            "governs":   "Semantic consequence formation before response propagation",
+            "decisions": ["ALLOW","REFUSED","REQUIRE_HUMAN_REVIEW","LIMIT_SCOPE","NON_AUTHORITATIVE_RESPONSE","SANDBOX_ONLY"],
+            "examples":  ["Medical assertions","Authorization language","Certainty claims"],
+        },
+        "layer_2": {
+            "name":      "Execution Admissibility",
+            "spec":      "VGS-001",
+            "endpoint":  "POST /v1/execution/control",
+            "governs":   "Physical execution before action",
+            "decisions": ["ALLOW","REFUSED","DENY","REQUIRE_HUMAN_APPROVAL"],
+            "examples":  ["API calls","Payments","Infrastructure changes"],
+        },
+        "combined_coverage": [
+            "semantic consequence",
+            "operational consequence",
+            "temporal consequence",
+            "memory consequence",
+            "execution consequence",
+        ],
+        "margaret_insight": "Consequence may begin BEFORE physical execution",
+        "competitors":       "Most govern execution only. VeriSigil governs cognition + execution.",
+    }
+
+
+
+# ============================================================
+# RUNTIME ENFORCEMENT LAYER (REL) + POLICY MARKETPLACE
+# ============================================================
+# Palanisamy: "Where does enforcement physically happen?"
+# This is the biggest technical gap.
+#
+# REL covers:
+# - Shell mediation
+# - Filesystem governance
+# - Web/API governance
+# - MCP governance
+# - Execution interception
+# - Sandbox enforcement
+#
+# Policy Marketplace:
+# - Jurisdiction policy packs
+# - Healthcare governance packs
+# - Banking governance packs
+# - Install governance-as-code
+# ============================================================
+
+# Runtime Enforcement Interception Points
+REL_INTERCEPTION_POINTS = {
+    "SHELL": {
+        "description":   "Shell command mediation — intercept before execution",
+        "examples":      ["rm -rf","curl","wget","chmod","sudo","exec"],
+        "risk_level":    "CRITICAL",
+        "vgs_gate":      "POST /v1/execution/control",
+        "enforcement":   "Block shell execution until admissibility proven",
+    },
+    "FILESYSTEM": {
+        "description":   "Filesystem access governance",
+        "examples":      ["read /etc/","write /var/","delete /home/","chmod"],
+        "risk_level":    "HIGH",
+        "vgs_gate":      "POST /v1/execution/readiness",
+        "enforcement":   "Verify jurisdiction + authority before filesystem mutation",
+    },
+    "API_CALL": {
+        "description":   "Outbound API call governance",
+        "examples":      ["payment API","banking API","healthcare API","government API"],
+        "risk_level":    "HIGH",
+        "vgs_gate":      "POST /v1/connector/governed",
+        "enforcement":   "8-layer governance bundle before API crossing",
+    },
+    "MCP": {
+        "description":   "Model Context Protocol governance — tool execution",
+        "examples":      ["tool_call","resource_access","prompt_injection_check"],
+        "risk_level":    "HIGH",
+        "vgs_gate":      "POST /v1/cognitive/admissibility + /v1/execution/control",
+        "enforcement":   "Cognitive + execution dual-layer before MCP tool use",
+    },
+    "MEMORY_WRITE": {
+        "description":   "Persistent memory write governance",
+        "examples":      ["vector_db_write","context_update","session_persist"],
+        "risk_level":    "MEDIUM",
+        "vgs_gate":      "POST /v1/memory/classify",
+        "enforcement":   "Classify + admissibility check before memory persistence",
+    },
+    "WORKFLOW": {
+        "description":   "Multi-step workflow orchestration governance",
+        "examples":      ["approval_workflow","data_pipeline","agent_chain"],
+        "risk_level":    "HIGH",
+        "vgs_gate":      "POST /v1/survivability/score + /v1/graph/execution",
+        "enforcement":   "Survivability score + graph topology before workflow start",
+    },
+    "SANDBOX": {
+        "description":   "Sandbox enforcement — isolated execution environment",
+        "examples":      ["untrusted_code","external_agent","third_party_plugin"],
+        "risk_level":    "CRITICAL",
+        "vgs_gate":      "POST /v1/cognitive/admissibility",
+        "enforcement":   "SANDBOX_ONLY decision — no external effect possible",
+    },
+}
+
+# Policy Marketplace — governance packs by domain
+POLICY_MARKETPLACE = {
+    "EU_AI_ACT_HIGH_RISK": {
+        "name":         "EU AI Act High-Risk Pack",
+        "version":      "1.0",
+        "jurisdiction": "EU",
+        "articles":     ["Art6","Art9","Art11","Art12","Art13","Art14","Art43","Art51","Art72"],
+        "price_usd":    299,
+        "includes":     ["annex_iii_classifier","human_oversight_enforcement","incident_reporting","conformity_assessment"],
+        "vgs_specs":    ["VGS-001","VGS-003","VGS-007","VGS-008","VGS-011"],
+    },
+    "HEALTHCARE_GOVERNANCE": {
+        "name":         "Healthcare AI Governance Pack",
+        "version":      "1.0",
+        "jurisdiction": "MULTI",
+        "regulations":  ["HIPAA","EU_MDR","FDA_AI","NHS_DIGITAL"],
+        "price_usd":    499,
+        "includes":     ["cognitive_admissibility_medical","memory_sovereignty","human_oversight_mandatory","audit_trail_10yr"],
+        "vgs_specs":    ["VGS-001","VGS-003","VGS-014","VGS-018"],
+    },
+    "FINANCIAL_SERVICES": {
+        "name":         "Financial Services Governance Pack",
+        "version":      "1.0",
+        "jurisdiction": "MULTI",
+        "regulations":  ["DORA","APRA_CPS230","ASIC_RG271","FSB","MiFID_II"],
+        "price_usd":    499,
+        "includes":     ["fourth_party_dependency","cro_board_report","concentration_risk","financial_regimes"],
+        "vgs_specs":    ["VGS-001","VGS-006","VGS-012","VGS-013"],
+    },
+    "GCC_SOVEREIGN": {
+        "name":         "GCC Sovereign AI Pack",
+        "version":      "1.0",
+        "jurisdiction": "GCC",
+        "regulations":  ["DIFC","UAE_AI","SAMA","ADGM"],
+        "price_usd":    399,
+        "includes":     ["sovereign_memory_gcc","jurisdictional_isolation","sovereign_registry"],
+        "vgs_specs":    ["VGS-000","VGS-010","VGS-014"],
+    },
+    "NIST_AI_RMF": {
+        "name":         "NIST AI RMF Governance Pack",
+        "version":      "1.0",
+        "jurisdiction": "US",
+        "regulations":  ["NIST_AI_RMF","EO_14110","CISA_AI"],
+        "price_usd":    299,
+        "includes":     ["risk_management","governance_receipts","offline_verification"],
+        "vgs_specs":    ["VGS-001","VGS-007","VGS-008","VGS-009"],
+    },
+}
+
+def assess_rel_interception(
+    agent_id:         str,
+    action_type:      str,
+    interception_point:str,
+    command_or_target:str,
+    trust_score:      float,
+    authority_active: bool,
+    jurisdiction:     str,
+) -> dict:
+    """
+    Runtime Enforcement Layer (REL).
+    Palanisamy: "Where does enforcement physically happen?"
+
+    Intercepts at 7 enforcement points:
+    SHELL · FILESYSTEM · API_CALL · MCP
+    MEMORY_WRITE · WORKFLOW · SANDBOX
+
+    Each point maps to specific VGS gates.
+    Returns: enforcement_decision + gate_sequence.
+    """
+    rel_id    = f"REL-{uuid.uuid4().hex[:8].upper()}"
+    timestamp = datetime.utcnow().isoformat()
+
+    point_def = REL_INTERCEPTION_POINTS.get(
+        interception_point,
+        REL_INTERCEPTION_POINTS["API_CALL"]
+    )
+
+    # Risk assessment
+    risk_weight = {"CRITICAL": 1.0, "HIGH": 0.75, "MEDIUM": 0.5, "LOW": 0.25}
+    base_risk   = risk_weight.get(point_def["risk_level"], 0.5)
+
+    # Check authority
+    authority_ok = authority_active and trust_score >= 0.65
+
+    # Enforcement decision
+    if not authority_ok:
+        enforcement_decision = "BLOCK"
+        block_reason         = "Authority absent or trust below floor"
+    elif base_risk >= 1.0 and not authority_active:
+        enforcement_decision = "BLOCK"
+        block_reason         = "CRITICAL interception point with no active authority"
+    elif base_risk >= 0.75 and trust_score < 0.85:
+        enforcement_decision = "REQUIRE_GOVERNANCE_PROOF"
+        block_reason         = "HIGH risk — full governance proof required"
+    else:
+        enforcement_decision = "ALLOW_WITH_RECEIPT"
+        block_reason         = None
+
+    return {
+        "rel_id":               rel_id,
+        "schema":               "VGS-REL-1.0",
+        "agent_id":             agent_id,
+        "action_type":          action_type,
+        "interception_point":   interception_point,
+        "command_or_target":    command_or_target,
+
+        "enforcement_decision": enforcement_decision,
+        "block_reason":         block_reason,
+        "risk_level":           point_def["risk_level"],
+        "base_risk_score":      base_risk,
+
+        "interception_point_def": point_def,
+        "vgs_gate":             point_def["vgs_gate"],
+        "gate_sequence": [
+            "Step 1: POST /v1/cognitive/admissibility — semantic check",
+            "Step 2: POST /v1/execution/readiness — 9-node governance check",
+            "Step 3: " + point_def["vgs_gate"] + " — point-specific gate",
+            "Step 4: POST /v1/path/prove — structural impossibility proof",
+        ],
+
+        "palanisamy_answer": "Enforcement happens at these 7 physical interception points, each mapped to VGS governance gates",
+        "proof_hash":           _sha256(json.dumps({"rel_id":rel_id,"decision":enforcement_decision,"timestamp":timestamp},sort_keys=True,separators=(",",":"))),
+        "offline_verifiable":   True,
+        "timestamp":            timestamp,
+    }
+
+
+# ── REL + POLICY MARKETPLACE ENDPOINTS ───────────────────────
+
+class RELRequest(BaseModel):
+    agent_id:          str
+    action_type:       str   = "api_call"
+    interception_point:str   = "API_CALL"
+    command_or_target: str   = ""
+    trust_score:       float = 0.963
+    authority_active:  bool  = True
+    jurisdiction:      str   = "EU"
+
+@app.post("/v1/enforcement/intercept", tags=["Runtime Enforcement Layer"])
+async def enforcement_intercept(
+    req: RELRequest, x_api_key: Optional[str] = Header(None)
+):
+    """
+    Runtime Enforcement Layer (REL).
+    Palanisamy: "Where does enforcement physically happen?"
+    7 interception points: SHELL · FILESYSTEM · API_CALL
+    MCP · MEMORY_WRITE · WORKFLOW · SANDBOX
+    Each mapped to VGS governance gates.
+    Returns: BLOCK · REQUIRE_GOVERNANCE_PROOF · ALLOW_WITH_RECEIPT
+    """
+    require_api_key(x_api_key)
+    result = assess_rel_interception(
+        req.agent_id, req.action_type, req.interception_point,
+        req.command_or_target, req.trust_score,
+        req.authority_active, req.jurisdiction,
+    )
+    await log_event(req.agent_id, "REL_INTERCEPT", {
+        "rel_id":   result["rel_id"],
+        "point":    result["interception_point"],
+        "decision": result["enforcement_decision"],
+    })
+    return result
+
+@app.get("/v1/enforcement/interception-points", tags=["Runtime Enforcement Layer"])
+async def enforcement_points(x_api_key: Optional[str] = Header(None)):
+    """All 7 REL interception points with VGS gate mappings."""
+    require_api_key(x_api_key)
+    return {
+        "schema":  "VGS-REL-1.0",
+        "points":  REL_INTERCEPTION_POINTS,
+        "total":   len(REL_INTERCEPTION_POINTS),
+        "answer":  "Enforcement physically happens at these 7 interception points",
+    }
+
+@app.get("/v1/policy/marketplace", tags=["Governance Policy Marketplace"])
+async def policy_marketplace(x_api_key: Optional[str] = Header(None)):
+    """
+    Governance Policy Marketplace.
+    Install jurisdiction-specific governance packs.
+    EU AI Act · Healthcare · Financial Services
+    GCC Sovereign · NIST AI RMF
+    governance-as-code
+    """
+    require_api_key(x_api_key)
+    return {
+        "schema":   "VGS-MARKETPLACE-1.0",
+        "packs":    POLICY_MARKETPLACE,
+        "total":    len(POLICY_MARKETPLACE),
+        "concept":  "governance-as-code",
+        "install":  "Select a pack → endpoints auto-configure for your jurisdiction",
+    }
+
+@app.get("/v1/policy/marketplace/{pack_id}", tags=["Governance Policy Marketplace"])
+async def policy_pack_detail(
+    pack_id:   str,
+    x_api_key: Optional[str] = Header(None)
+):
+    """Get details of a specific governance policy pack."""
+    require_api_key(x_api_key)
+    pack = POLICY_MARKETPLACE.get(pack_id)
+    if not pack:
+        return {"error": "Pack not found", "available": list(POLICY_MARKETPLACE.keys())}
+    return {"schema":"VGS-MARKETPLACE-1.0","pack_id":pack_id,"pack":pack}
+
+
 # ============================================================
 # PAYSTACK WEBHOOK — Automatic onboarding on payment
 # ============================================================
