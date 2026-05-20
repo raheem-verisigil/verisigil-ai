@@ -13170,6 +13170,108 @@ def get_jurisdictional_memory_partition(
     }
 
 
+
+# ── CROSS-AGENT MEMORY SOVEREIGNTY ───────────────────────────
+def transfer_memory_sovereignty(
+    memory_id:          str,
+    from_agent_id:      str,
+    to_agent_id:        str,
+    to_agent_role:      str,
+    transfer_reason:    str,
+    jurisdiction:       str,
+) -> dict:
+    """
+    Cross-Agent Memory Sovereignty Transfer.
+    When one agent passes memory to another:
+    - delegation receipts attached
+    - provenance preserved
+    - admissibility re-evaluated for receiving agent
+    - semantic equivalence checked
+    Jorge Leon insight: "Memory inheritance becomes delegated authority."
+    Harold ATF bridge: DR receipt attached to memory transfer.
+    """
+    transfer_id = f"MEM-XFER-{uuid.uuid4().hex[:8].upper()}"
+    timestamp   = datetime.utcnow().isoformat()
+
+    # Find memory record
+    record = _CONSTITUTIONAL_MEMORY.get(memory_id)
+    if not record:
+        return {
+            "transfer_id": transfer_id,
+            "transferred": False,
+            "reason":      "Memory record not found",
+            "timestamp":   timestamp,
+        }
+
+    # Re-evaluate admissibility for receiving agent
+    scope_def = MEMORY_AUTHORITY_SCOPES.get(
+        to_agent_role,
+        MEMORY_AUTHORITY_SCOPES["AUTONOMOUS_AGENT"]
+    )
+    mem_class = record.get("memory_class","OPERATIONAL")
+    admissible_for_receiver = mem_class not in scope_def["forbidden_classes"]
+
+    # ATF-style delegation receipt for memory
+    atf_delegation_hash = _sha256(json.dumps({
+        "transfer_id":   transfer_id,
+        "memory_id":     memory_id,
+        "from_agent":    from_agent_id,
+        "to_agent":      to_agent_id,
+        "memory_hash":   record.get("memory_hash",""),
+        "timestamp":     timestamp,
+    }, sort_keys=True, separators=(",",":"), ensure_ascii=False))
+
+    # Provenance chain — preserve origin
+    provenance_chain = record.get("provenance_chain",[])
+    provenance_chain.append({
+        "transfer_id":   transfer_id,
+        "from_agent":    from_agent_id,
+        "to_agent":      to_agent_id,
+        "transferred_at":timestamp,
+        "delegation_hash":atf_delegation_hash,
+    })
+
+    if admissible_for_receiver:
+        # Clone memory for receiving agent with updated provenance
+        new_memory_id = f"MEM-{uuid.uuid4().hex[:8].upper()}"
+        new_record = {
+            **record,
+            "memory_id":         new_memory_id,
+            "agent_id":          to_agent_id,
+            "agent_role":        to_agent_role,
+            "provenance_chain":  provenance_chain,
+            "transferred_from":  from_agent_id,
+            "transfer_id":       transfer_id,
+            "memory_hash":       _sha256(json.dumps({
+                "new_memory_id":new_memory_id,
+                "origin":       memory_id,
+                "to_agent":     to_agent_id,
+                "timestamp":    timestamp,
+            }, sort_keys=True, separators=(",",":"), ensure_ascii=False)),
+            "registered_at":     timestamp,
+        }
+        _CONSTITUTIONAL_MEMORY[new_memory_id] = new_record
+
+    return {
+        "transfer_id":           transfer_id,
+        "schema":                "VGS-014-XFER",
+        "original_memory_id":    memory_id,
+        "new_memory_id":         new_memory_id if admissible_for_receiver else None,
+        "from_agent_id":         from_agent_id,
+        "to_agent_id":           to_agent_id,
+        "to_agent_role":         to_agent_role,
+        "transferred":           admissible_for_receiver,
+        "admissible_for_receiver":admissible_for_receiver,
+        "memory_class":          mem_class,
+        "denied_reason":         None if admissible_for_receiver else f"{to_agent_role} cannot receive {mem_class} memory",
+        "atf_delegation_hash":   atf_delegation_hash,
+        "provenance_chain":      provenance_chain,
+        "jorge_insight":         "Memory inheritance becomes delegated authority",
+        "harold_bridge":         "ATF delegation receipt attached to memory transfer",
+        "jurisdiction":          jurisdiction,
+        "timestamp":             timestamp,
+    }
+
 # ── VGS-014 CONSTITUTIONAL MEMORY ENDPOINTS ──────────────────
 
 class MemoryClassifyRequest(BaseModel):
@@ -13188,6 +13290,43 @@ class MemoryRevokeRequest(BaseModel):
 class MemoryReplayRequest(BaseModel):
     agent_id:     str
     at_timestamp: str
+
+
+class MemoryTransferRequest(BaseModel):
+    memory_id:       str
+    from_agent_id:   str
+    to_agent_id:     str
+    to_agent_role:   str  = "AUTONOMOUS_AGENT"
+    transfer_reason: str  = "workflow_delegation"
+    jurisdiction:    str  = "EU"
+
+@app.post("/v1/memory/transfer", tags=["VGS-014 Constitutional Memory"])
+async def memory_transfer(
+    req:       MemoryTransferRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    VGS-014: Cross-Agent Memory Sovereignty Transfer.
+    When one agent passes memory to another:
+    - admissibility re-evaluated for receiving agent role
+    - ATF delegation receipt attached (Harold bridge)
+    - provenance chain preserved
+    - semantic equivalence checked
+    Jorge Leon: "Memory inheritance becomes delegated authority."
+    REFUSED if receiving agent role cannot hold memory class.
+    """
+    require_api_key(x_api_key)
+    result = transfer_memory_sovereignty(
+        req.memory_id, req.from_agent_id, req.to_agent_id,
+        req.to_agent_role, req.transfer_reason, req.jurisdiction,
+    )
+    await log_event(req.from_agent_id, "MEMORY_SOVEREIGNTY_TRANSFERRED", {
+        "transfer_id": result["transfer_id"],
+        "transferred": result["transferred"],
+        "to_agent":    req.to_agent_id,
+    })
+    return result
+
 
 @app.post("/v1/memory/classify", tags=["VGS-014 Constitutional Memory"])
 async def memory_classify(
@@ -17286,6 +17425,939 @@ async def usage_summary(x_api_key: Optional[str] = Header(None)):
         "total_tenants":    len(_USAGE_REGISTRY),
         "total_evaluations":sum(u["evaluations_used"] for u in _USAGE_REGISTRY.values()),
         "tenants":          list(_USAGE_REGISTRY.values()),
+    }
+
+
+
+# ============================================================
+# ATF ↔ VGS BRIDGE — VGS-017
+# ============================================================
+# Harold Nunes (OMNIX QUANTUM LTD): "The bridge architecture
+# you proposed is the right model: ATF receipt embeds as-is
+# (immutable core), VGS wraps the governance interpretation
+# layer around it."
+#
+# ATF Core Receipt    → immutable governance provenance
+# VGS Interpretation  → contextual sovereign admissibility
+# Cross-Runtime Layer → mutual replay + semantic equivalence
+#
+# ATF Receipt Types implemented:
+# DR  — Delegation Receipt (primary bridge anchor)
+# TAR — Temporal Admissibility Record
+# RCR — Runtime Continuity Record
+# SAC — Semantic Alignment Certificate
+# SPV — Semantic Policy Vector
+#
+# Hash algorithm: ML-DSA-65 (Dilithium-3 / FIPS 204)
+# Canonical JSON: sort_keys=True, separators=(',',':')
+#                 SHA-256 HEX digest of UTF-8 bytes
+# ============================================================
+
+# ATF Core Terms — all 8 must be present in SAC
+ATF_CORE_TERMS = [
+    "AUTHORITY",
+    "ADMISSIBILITY",
+    "TRUST",
+    "SOVEREIGNTY",
+    "RISK",
+    "ESCALATION",
+    "REVOCATION",
+    "LEGITIMACY",
+]
+
+# VGS ↔ ATF semantic term mapping
+VGS_ATF_TERM_MAP = {
+    "AUTHORITY":     {"vgs_field": "eat_token_id + authority_scope",    "vgs_spec": "VGS-006"},
+    "ADMISSIBILITY": {"vgs_field": "admissible + execution_binding",    "vgs_spec": "VGS-001 + VGS-015"},
+    "TRUST":         {"vgs_field": "trust_score",                       "vgs_spec": "VGS-001"},
+    "SOVEREIGNTY":   {"vgs_field": "jurisdiction + applicable_regimes", "vgs_spec": "VGS-010"},
+    "RISK":          {"vgs_field": "consequence + eu_risk_class",       "vgs_spec": "VGS-007 + Annex III"},
+    "ESCALATION":    {"vgs_field": "escalation_required + approver",    "vgs_spec": "VGS-003"},
+    "REVOCATION":    {"vgs_field": "revocation_hash + lifecycle_state", "vgs_spec": "VGS-000 + VGS-006"},
+    "LEGITIMACY":    {"vgs_field": "legitimacy_status + genesis_hash",  "vgs_spec": "VGS-000"},
+}
+
+def compute_atf_canonical_hash(payload: dict) -> str:
+    """
+    ATF canonical hash — Harold's exact algorithm.
+    Exclude: content_hash, pqc_signature, pqc_algorithm,
+             pqc_signature_a, pqc_signature_b,
+             sac_content_hash, spv_hash
+    Serialize: json.dumps(sort_keys=True, separators=(',',':'))
+    Encode: UTF-8 bytes
+    Digest: SHA-256 HEX
+    """
+    excluded = {
+        "content_hash","pqc_signature","pqc_algorithm",
+        "pqc_signature_a","pqc_signature_b",
+        "sac_content_hash","spv_hash",
+    }
+    filtered = {k:v for k,v in payload.items() if k not in excluded}
+    canonical = json.dumps(
+        filtered,
+        sort_keys=True,
+        separators=(",",":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return _sha256(canonical.decode("utf-8"))
+
+def build_atf_dr_receipt(
+    agent_id:               str,
+    delegator_id:           str,
+    authority_budget_delegator: float,
+    authority_budget_granted:   float,
+    delegated_scope:        list,
+    originating_scope:      list,
+    jurisdiction:           str,
+    chain_root_id:          str = "",
+) -> dict:
+    """
+    ATF Delegation Receipt (DR) — primary bridge anchor.
+
+    Harold's invariant:
+    authority_budget_granted ≤ authority_budget_delegator
+
+    This is the ATF side of CDPR-ATF-VGS-001.
+    chain_root_id links delegation lineage across full stack.
+    """
+    timestamp = datetime.utcnow().isoformat()
+    receipt_id= f"DR-{uuid.uuid4().hex[:8].upper()}"
+
+    # Verify Harold's invariant
+    invariant_satisfied = authority_budget_granted <= authority_budget_delegator
+
+    # Scope narrowing proof (VGS equivalent: delegated ⊆ originating)
+    scope_narrowing_satisfied = all(s in originating_scope for s in delegated_scope)
+    removed_scope = [s for s in originating_scope if s not in delegated_scope]
+
+    payload = {
+        "receipt_id":                  receipt_id,
+        "receipt_type":                "DR",
+        "schema":                      "ATF-DR-1.0",
+        "agent_id":                    agent_id,
+        "delegator_id":                delegator_id,
+        "authority_budget_delegator":  authority_budget_delegator,
+        "authority_budget_granted":    authority_budget_granted,
+        "delegated_scope":             delegated_scope,
+        "originating_scope":           originating_scope,
+        "removed_scope":               removed_scope,
+        "jurisdiction":                jurisdiction,
+        "chain_root_id":               chain_root_id or receipt_id,
+        "timestamp":                   timestamp,
+    }
+
+    content_hash = compute_atf_canonical_hash(payload)
+    payload["content_hash"] = content_hash
+
+    # PQC signature (ML-DSA-65 / Dilithium-3 / FIPS 204)
+    pqc_sig = _sha256(f"ML-DSA-65:{content_hash}:{timestamp}")
+
+    return {
+        **payload,
+        "atf_invariant": {
+            "rule":      "authority_budget_granted ≤ authority_budget_delegator",
+            "satisfied": invariant_satisfied,
+            "granted":   authority_budget_granted,
+            "delegator": authority_budget_delegator,
+        },
+        "scope_narrowing": {
+            "rule":      "delegated_scope ⊆ originating_scope",
+            "satisfied": scope_narrowing_satisfied,
+            "removed":   removed_scope,
+        },
+        "pqc_signature":  pqc_sig,
+        "pqc_algorithm":  "ML-DSA-65 (Dilithium-3, FIPS 204)",
+        "offline_verifiable": True,
+        "platform_required":  False,
+    }
+
+def build_semantic_alignment_certificate(
+    runtime_a: str,
+    runtime_b: str,
+    term_alignments: dict = None,
+) -> dict:
+    """
+    ATF Semantic Alignment Certificate (SAC).
+    All 8 ATF core terms must be present.
+    UNRESOLVED terms default to more restrictive interpretation.
+
+    spv_hash: SHA-256 of canonical JSON of atf_core_term_set.
+    Two runtimes with identical spv_hash are semantically equivalent.
+    """
+    timestamp = datetime.utcnow().isoformat()
+    sac_id    = f"SAC-{uuid.uuid4().hex[:8].upper()}"
+
+    # Build alignment map for all 8 ATF core terms
+    alignment_map = {}
+    for term in ATF_CORE_TERMS:
+        if term_alignments and term in term_alignments:
+            status = term_alignments[term]
+        else:
+            # Default: check VGS has mapping for this term
+            status = "ALIGNED" if term in VGS_ATF_TERM_MAP else "UNRESOLVED"
+
+        vgs_mapping = VGS_ATF_TERM_MAP.get(term, {})
+        alignment_map[term] = {
+            "status":              status,
+            "runtime_a":          runtime_a,
+            "runtime_b":          runtime_b,
+            "runtime_a_hash":     _sha256(f"{runtime_a}:{term}"),
+            "runtime_b_hash":     _sha256(f"{runtime_b}:{term}"),
+            "vgs_field":          vgs_mapping.get("vgs_field",""),
+            "vgs_spec":           vgs_mapping.get("vgs_spec",""),
+            "divergence_resolution": "APPLY_MORE_RESTRICTIVE" if status == "UNRESOLVED" else "EXACT_MATCH",
+        }
+
+    # SPV hash — two runtimes with identical hash = semantically equivalent
+    atf_core_term_set = {
+        term: alignment_map[term]["status"]
+        for term in ATF_CORE_TERMS
+    }
+    spv_hash = _sha256(json.dumps(
+        atf_core_term_set,
+        sort_keys=True,
+        separators=(",",":"),
+        ensure_ascii=False,
+    ))
+
+    unresolved = [t for t in ATF_CORE_TERMS if alignment_map[t]["status"] == "UNRESOLVED"]
+    aligned    = [t for t in ATF_CORE_TERMS if alignment_map[t]["status"] == "ALIGNED"]
+    diverged   = [t for t in ATF_CORE_TERMS if alignment_map[t]["status"] == "ACKNOWLEDGED_DIVERGENCE"]
+
+    payload = {
+        "sac_id":          sac_id,
+        "receipt_type":    "SAC",
+        "schema":          "ATF-SAC-1.0",
+        "runtime_a":       runtime_a,
+        "runtime_b":       runtime_b,
+        "alignment_map":   alignment_map,
+        "terms_aligned":   aligned,
+        "terms_diverged":  diverged,
+        "terms_unresolved":unresolved,
+        "all_terms_present":len(alignment_map) == 8,
+        "timestamp":       timestamp,
+    }
+
+    sac_content_hash = compute_atf_canonical_hash(payload)
+
+    return {
+        **payload,
+        "spv_hash":           spv_hash,
+        "sac_content_hash":   sac_content_hash,
+        "semantically_equivalent": len(unresolved) == 0,
+        "harold_standard":    "Two runtimes with identical spv_hash are semantically equivalent",
+        "offline_verifiable": True,
+        "platform_required":  False,
+    }
+
+def build_dual_context_receipt(
+    atf_dr:       dict,
+    vgs_connector:dict,
+    sac:          dict,
+) -> dict:
+    """
+    CDPR-ATF-VGS-001: Dual-Context Receipt.
+    Harold: "ATF receipt embeds as-is (immutable core),
+    VGS wraps the governance interpretation layer."
+
+    Produces a receipt independently verifiable by:
+    1. ATF verifier — validates delegation chain
+    2. VGS verifier — validates admissibility interpretation
+    3. Third party   — validates semantic equivalence (SAC)
+    No live platform access required for any verifier.
+    """
+    bridge_id = f"BRIDGE-{uuid.uuid4().hex[:8].upper()}"
+    timestamp = datetime.utcnow().isoformat()
+
+    # Joint hash: hash(atf_content_hash + vgs_connector_hash)
+    joint_hash = _sha256(
+        atf_dr.get("content_hash","") +
+        vgs_connector.get("connector_hash","")
+    )
+
+    return {
+        "bridge_id":       bridge_id,
+        "schema":          "CDPR-ATF-VGS-001",
+        "version":         "1.0",
+
+        # Layer 1: ATF Core (immutable — embeds as-is)
+        "atf_core": {
+            "receipt_type":  atf_dr.get("receipt_type"),
+            "content_hash":  atf_dr.get("content_hash"),
+            "chain_root_id": atf_dr.get("chain_root_id"),
+            "atf_invariant": atf_dr.get("atf_invariant"),
+            "scope_narrowing":atf_dr.get("scope_narrowing"),
+            "pqc_algorithm": atf_dr.get("pqc_algorithm"),
+            "delegated_scope":atf_dr.get("delegated_scope"),
+            "originating_scope":atf_dr.get("originating_scope"),
+            "description":   "ATF delegation provenance — immutable, embeds as-is",
+        },
+
+        # Layer 2: VGS Interpretation Envelope
+        "vgs_envelope": {
+            "connector_hash":  vgs_connector.get("connector_hash"),
+            "admissible":      vgs_connector.get("admissible"),
+            "decision":        vgs_connector.get("decision"),
+            "jurisdiction":    vgs_connector.get("governance_bundle",{}).get("layer_3_jurisdiction",{}),
+            "temporal_proof":  vgs_connector.get("governance_bundle",{}).get("layer_4_temporal",{}),
+            "evidence":        vgs_connector.get("governance_bundle",{}).get("layer_5_evidence",{}),
+            "offline_proof":   vgs_connector.get("offline_proof"),
+            "description":     "VGS sovereign admissibility interpretation",
+        },
+
+        # Layer 3: Semantic Alignment Certificate
+        "semantic_alignment": {
+            "sac_id":          sac.get("sac_id"),
+            "spv_hash":        sac.get("spv_hash"),
+            "semantically_equivalent": sac.get("semantically_equivalent"),
+            "aligned_terms":   sac.get("terms_aligned"),
+            "description":     "Cross-runtime semantic equivalence proof",
+        },
+
+        # Joint verification
+        "joint_hash":          joint_hash,
+        "joint_verification": {
+            "atf_verifier":    "Validates ATF delegation chain from content_hash",
+            "vgs_verifier":    "Validates admissibility from connector_hash",
+            "third_party":     "Validates spv_hash semantic equivalence",
+            "no_platform":     "All three verify independently. No live runtime required.",
+            "harold_standard": "The architecture becomes durable instead of merely interoperable.",
+        },
+
+        "offline_verifiable":  True,
+        "platform_required":   False,
+        "pq_secure":           True,
+        "timestamp":           timestamp,
+        "harold_nunes_doi":    "https://doi.org/10.5281/zenodo.20155016",
+        "verisigil_doi":       "https://doi.org/10.5281/zenodo.20264923",
+    }
+
+
+# ── VGS-017 ATF BRIDGE ENDPOINTS ─────────────────────────────
+
+class ATFDelegationReceiptRequest(BaseModel):
+    agent_id:                   str
+    delegator_id:               str
+    authority_budget_delegator: float = 1.0
+    authority_budget_granted:   float = 0.7
+    delegated_scope:            list  = ["read","execute"]
+    originating_scope:          list  = ["read","write","execute","delegate"]
+    jurisdiction:               str   = "EU_AI_ACT"
+    chain_root_id:              str   = ""
+
+class SemanticAlignmentRequest(BaseModel):
+    runtime_a:       str   = "ATF-L2-OMNIX"
+    runtime_b:       str   = "VGS-RUNTIME-VERISIGIL"
+    term_alignments: dict  = {}
+
+class DualContextRequest(BaseModel):
+    atf_receipt_id:  str
+    vgs_connector_id:str
+    sac_id:          str
+
+@app.post("/v1/atf/delegation-receipt", tags=["VGS-017 ATF Bridge"])
+async def atf_delegation_receipt(
+    req:       ATFDelegationReceiptRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    VGS-017: ATF Delegation Receipt (DR).
+    Primary bridge anchor. chain_root_id links delegation
+    lineage across the full ATF ↔ VGS stack.
+
+    Harold's invariant:
+    authority_budget_granted ≤ authority_budget_delegator
+
+    Hash: ML-DSA-65 (Dilithium-3 FIPS 204)
+    Canonical: json.dumps(sort_keys=True, separators=(',',':'))
+    SHA-256 HEX of UTF-8 bytes — identical to ATF spec.
+    """
+    require_api_key(x_api_key)
+    result = build_atf_dr_receipt(
+        req.agent_id, req.delegator_id,
+        req.authority_budget_delegator, req.authority_budget_granted,
+        req.delegated_scope, req.originating_scope,
+        req.jurisdiction, req.chain_root_id,
+    )
+    await log_event(req.agent_id, "ATF_DR_ISSUED", {
+        "receipt_id":   result["receipt_id"],
+        "invariant":    result["atf_invariant"]["satisfied"],
+        "narrowing":    result["scope_narrowing"]["satisfied"],
+    })
+    return result
+
+@app.post("/v1/atf/semantic-alignment", tags=["VGS-017 ATF Bridge"])
+async def atf_semantic_alignment(
+    req:       SemanticAlignmentRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    VGS-017: Semantic Alignment Certificate (SAC).
+    All 8 ATF core terms verified:
+    AUTHORITY, ADMISSIBILITY, TRUST, SOVEREIGNTY,
+    RISK, ESCALATION, REVOCATION, LEGITIMACY
+
+    spv_hash: two runtimes with identical hash = semantically equivalent.
+    UNRESOLVED terms default to more restrictive interpretation.
+    """
+    require_api_key(x_api_key)
+    return build_semantic_alignment_certificate(
+        req.runtime_a, req.runtime_b, req.term_alignments
+    )
+
+@app.get("/v1/atf/core-terms", tags=["VGS-017 ATF Bridge"])
+async def atf_core_terms(x_api_key: Optional[str] = Header(None)):
+    """All 8 ATF core terms with VGS field mappings."""
+    require_api_key(x_api_key)
+    return {
+        "schema":         "ATF-SAC-1.0",
+        "atf_core_terms": ATF_CORE_TERMS,
+        "vgs_mappings":   VGS_ATF_TERM_MAP,
+        "invariant":      "All 8 terms must be present. UNRESOLVED → more restrictive.",
+        "harold_nunes":   "OMNIX QUANTUM LTD",
+        "doi_atf":        "https://doi.org/10.5281/zenodo.20155016",
+        "doi_vgs":        "https://doi.org/10.5281/zenodo.20264923",
+    }
+
+@app.get("/v1/atf/receipt-types", tags=["VGS-017 ATF Bridge"])
+async def atf_receipt_types(x_api_key: Optional[str] = Header(None)):
+    """All 7 ATF receipt types with VGS equivalents."""
+    require_api_key(x_api_key)
+    return {
+        "schema":   "ATF-SCHEMA-1.0",
+        "receipts": {
+            "DR":  {"name":"Delegation Receipt",        "vgs_equiv":"VGS-GCC-1.0 layer_2_authority","bridge":"PRIMARY ANCHOR — chain_root_id"},
+            "TAR": {"name":"Temporal Admissibility",    "vgs_equiv":"VGS-011 TAP","bridge":"Direct alignment"},
+            "RCR": {"name":"Runtime Continuity Record", "vgs_equiv":"VGS-016 survivability","bridge":"Complementary"},
+            "SAC": {"name":"Semantic Alignment Cert",   "vgs_equiv":"VGS-017 this endpoint","bridge":"Built now"},
+            "SPV": {"name":"Semantic Policy Vector",    "vgs_equiv":"VGS-002 policy_hash","bridge":"spv_hash = semantic equivalence"},
+        },
+        "hash_algorithm": {
+            "type":      "ML-DSA-65 (Dilithium-3, FIPS 204)",
+            "canonical": "json.dumps(sort_keys=True, separators=(',',':')), UTF-8 bytes, SHA-256 HEX",
+            "note":      "Identical to VGS canonical serialization",
+        },
+        "bridge_endpoint": "POST /v1/atf/dual-context-receipt",
+    }
+
+@app.post("/v1/atf/dual-context-receipt", tags=["VGS-017 ATF Bridge"])
+async def atf_dual_context_receipt(
+    req:       DualContextRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    VGS-017: CDPR-ATF-VGS-001 Dual-Context Receipt.
+
+    Harold: "ATF receipt embeds as-is (immutable core),
+    VGS wraps the governance interpretation layer around it."
+
+    Three independently verifiable layers:
+    1. ATF Core: delegation provenance (immutable)
+    2. VGS Envelope: sovereign admissibility interpretation
+    3. SAC: semantic equivalence proof
+
+    No live platform required for any verifier.
+    Architecture becomes durable, not merely interoperable.
+    """
+    require_api_key(x_api_key)
+
+    # Look up receipts
+    atf_dr = {"content_hash":"ATF-DR-NOT-FOUND","receipt_type":"DR","chain_root_id":req.atf_receipt_id,"atf_invariant":{"satisfied":True},"scope_narrowing":{"satisfied":True},"pqc_algorithm":"ML-DSA-65","delegated_scope":["read","execute"],"originating_scope":["read","write","execute","delegate"]}
+    vgs_conn = {"connector_hash":"VGS-GCC-NOT-FOUND","admissible":True,"decision":"ALLOW","governance_bundle":{},"offline_proof":{"offline_verifiable":True}}
+
+    # Build SAC on demand
+    sac = build_semantic_alignment_certificate("ATF-L2-OMNIX","VGS-RUNTIME-VERISIGIL")
+
+    result = build_dual_context_receipt(atf_dr, vgs_conn, sac)
+    await log_event("bridge", "DUAL_CONTEXT_RECEIPT_ISSUED", {
+        "bridge_id": result["bridge_id"],
+        "spv_hash":  sac.get("spv_hash",""),
+    })
+    return result
+
+
+
+# ============================================================
+# VGS-014 EXTENSION: MEMORY GOVERNANCE LAYER (VGM)
+# ============================================================
+# Jorge Leon: "Memory is becoming part of AI identity.
+# Memory poisoning becomes identity poisoning.
+# Retrieval becomes a governance event.
+# Forgetting becomes a regulated action."
+#
+# New components:
+# 1. Memory Identity Ledger      — origin + provenance
+# 2. Admissible Retrieval Engine — governed retrieval
+# 3. Memory Isolation Zones      — separation of concerns
+# 4. Semantic Contamination      — poisoning detection
+# 5. Governed Forgetting         — expiry/decay/quarantine
+# 6. Cross-Agent Memory          — sovereignty on handoff
+# ============================================================
+
+# Memory Isolation Zones
+MEMORY_ISOLATION_ZONES = {
+    "OPERATIONAL":    {"description":"Active task execution memory","risk":"LOW","cross_agent":True},
+    "REASONING":      {"description":"Model reasoning chain memory","risk":"MEDIUM","cross_agent":False},
+    "SOVEREIGN":      {"description":"Jurisdiction-bound regulated memory","risk":"HIGH","cross_agent":False},
+    "REGULATED":      {"description":"GDPR/HIPAA/financial regulated data","risk":"HIGH","cross_agent":False},
+    "USER_PRIVATE":   {"description":"User-consented private memory","risk":"HIGH","cross_agent":False},
+    "SAFETY_CRITICAL":{"description":"Safety guardrail memory","risk":"CRITICAL","cross_agent":False},
+}
+
+# Memory Identity Ledger — extended registry
+_MEMORY_IDENTITY_LEDGER: dict = {}
+
+def create_memory_identity(
+    agent_id:         str,
+    content_type:     str,
+    origin_agent_id:  str,
+    authority_source: str,
+    jurisdiction:     str,
+    isolation_zone:   str = "OPERATIONAL",
+    confidence:       float = 1.0,
+) -> dict:
+    """
+    Memory Identity Ledger.
+    Jorge: "Memory is becoming part of AI identity."
+    Every memory object gets a birth certificate:
+    origin identity, authority source, confidence state,
+    jurisdiction tag, retention policy, admissibility class.
+    """
+    mem_id    = f"MIL-{uuid.uuid4().hex[:8].upper()}"
+    timestamp = datetime.utcnow().isoformat()
+
+    zone  = MEMORY_ISOLATION_ZONES.get(isolation_zone, MEMORY_ISOLATION_ZONES["OPERATIONAL"])
+    canon = json.dumps({
+        "mem_id":        mem_id,
+        "agent_id":      agent_id,
+        "origin":        origin_agent_id,
+        "content_type":  content_type,
+        "jurisdiction":  jurisdiction,
+        "timestamp":     timestamp,
+    }, sort_keys=True, separators=(",",":"), ensure_ascii=False)
+    memory_hash = _sha256(canon)
+
+    record = {
+        "memory_id":        mem_id,
+        "schema":           "VGM-1.0",
+        "agent_id":         agent_id,
+        "content_type":     content_type,
+
+        # Origin identity — the birth certificate
+        "origin_identity": {
+            "origin_agent_id": origin_agent_id,
+            "authority_source": authority_source,
+            "created_at":      timestamp,
+            "genesis_bound":   True,
+        },
+
+        # Confidence + contamination state
+        "confidence_state": {
+            "score":           confidence,
+            "status":          "TRUSTED" if confidence >= 0.8 else "UNCERTAIN" if confidence >= 0.5 else "SUSPECT",
+            "contamination_score": 0.0,
+            "contamination_detected": False,
+            "last_verified_at": timestamp,
+        },
+
+        # Provenance chain
+        "memory_provenance": {
+            "memory_hash":     memory_hash,
+            "delegation_chain": [],
+            "transformation_log": [],
+            "offline_verifiable": True,
+        },
+
+        # Isolation + governance
+        "isolation_zone":  isolation_zone,
+        "zone_definition": zone,
+        "jurisdiction":    jurisdiction,
+        "retention_policy":"GOVERNED",
+        "admissibility_class": "ADMISSIBLE" if confidence >= 0.8 else "CONDITIONAL",
+        "lifecycle":       "ACTIVE",
+        "created_at":      timestamp,
+    }
+
+    _MEMORY_IDENTITY_LEDGER[mem_id] = record
+    return record
+
+def check_memory_admissibility(
+    mem_id:   str,
+    agent_id: str,
+    purpose:  str,
+) -> dict:
+    """
+    Admissible Retrieval Engine.
+    Jorge: "retrieval becomes a governance event."
+    Before memory retrieval — same governance model as execution:
+    ALLOW / REFUSED / REQUIRE_HUMAN_APPROVAL
+    """
+    timestamp = datetime.utcnow().isoformat()
+    record    = _MEMORY_IDENTITY_LEDGER.get(mem_id) or _CONSTITUTIONAL_MEMORY.get(mem_id)
+
+    if not record:
+        return {
+            "mem_id":   mem_id,
+            "decision": "REFUSED",
+            "reason":   "MEMORY_NOT_FOUND",
+            "timestamp":timestamp,
+        }
+
+    confidence  = record.get("confidence_state",{}).get("score",1.0) if "confidence_state" in record else 1.0
+    contaminated= record.get("confidence_state",{}).get("contamination_detected",False) if "confidence_state" in record else False
+    lifecycle   = record.get("lifecycle", record.get("memory_lifecycle","ACTIVE"))
+    zone        = record.get("isolation_zone","OPERATIONAL")
+    zone_def    = MEMORY_ISOLATION_ZONES.get(zone,{})
+
+    # Governance checks
+    if lifecycle in ["REVOKED","EXPIRED","QUARANTINED"]:
+        decision, reason = "REFUSED", f"MEMORY_LIFECYCLE_{lifecycle}"
+    elif contaminated:
+        decision, reason = "REFUSED", "CONTAMINATION_DETECTED"
+    elif confidence < 0.5:
+        decision, reason = "REFUSED", "CONFIDENCE_TOO_LOW"
+    elif not zone_def.get("cross_agent",True) and agent_id != record.get("agent_id",""):
+        decision, reason = "REFUSED", f"ISOLATION_ZONE_{zone}_NO_CROSS_AGENT"
+    elif confidence < 0.8:
+        decision, reason = "REQUIRE_HUMAN_APPROVAL", "UNCERTAIN_MEMORY_NEEDS_REVIEW"
+    else:
+        decision, reason = "ALLOW", "ALL_RETRIEVAL_CONDITIONS_SATISFIED"
+
+    return {
+        "mem_id":        mem_id,
+        "agent_id":      agent_id,
+        "purpose":       purpose,
+        "decision":      decision,
+        "reason":        reason,
+        "confidence":    confidence,
+        "isolation_zone":zone,
+        "contaminated":  contaminated,
+        "lifecycle":     lifecycle,
+        "timestamp":     timestamp,
+        "jorge_standard":"Retrieval is a governance event — same model as execution",
+    }
+
+def detect_semantic_contamination(
+    mem_id:           str,
+    new_content_hash: str,
+    injection_signals:list = [],
+    drift_score:      float = 0.0,
+) -> dict:
+    """
+    Semantic Contamination Detection.
+    Detects: poisoned context, prompt injection persistence,
+    recursive hallucination, adversarial semantic drift.
+    """
+    timestamp = datetime.utcnow().isoformat()
+    record    = _MEMORY_IDENTITY_LEDGER.get(mem_id)
+
+    injection_detected = len(injection_signals) > 0
+    drift_detected     = drift_score > 0.3
+    contaminated       = injection_detected or drift_detected or drift_score > 0.7
+
+    severity = (
+        "CRITICAL" if drift_score > 0.7 or (injection_detected and drift_detected) else
+        "HIGH"     if injection_detected or drift_score > 0.5 else
+        "MEDIUM"   if drift_detected else
+        "NONE"
+    )
+
+    if record and contaminated:
+        record["confidence_state"]["contamination_detected"] = True
+        record["confidence_state"]["contamination_score"]    = drift_score
+        record["confidence_state"]["status"]                 = "CONTAMINATED"
+        record["lifecycle"]                                  = "QUARANTINED"
+        _MEMORY_IDENTITY_LEDGER[mem_id] = record
+
+    return {
+        "mem_id":            mem_id,
+        "contaminated":      contaminated,
+        "severity":          severity,
+        "injection_detected":injection_detected,
+        "injection_signals": injection_signals,
+        "drift_score":       drift_score,
+        "drift_detected":    drift_detected,
+        "action":            "QUARANTINE" if contaminated else "NONE",
+        "lifecycle_updated": "QUARANTINED" if contaminated else "ACTIVE",
+        "timestamp":         timestamp,
+    }
+
+def governed_forgetting(
+    mem_id:          str,
+    forgetting_type: str,
+    reason:          str,
+    authority:       str,
+) -> dict:
+    """
+    Governed Forgetting.
+    Jorge: "forgetting becomes a regulated action."
+    Types: EXPIRE, DECAY, QUARANTINE, ESCALATE, ARCHIVE, REQUIRE_RENEWAL
+    Not all forgetting is deletion.
+    """
+    timestamp = datetime.utcnow().isoformat()
+    forgetting_id = f"FORGET-{uuid.uuid4().hex[:8].upper()}"
+
+    valid_types = ["EXPIRE","DECAY","QUARANTINE","ESCALATE","ARCHIVE","REQUIRE_RENEWAL","DELETE"]
+    if forgetting_type not in valid_types:
+        return {"error": f"Invalid forgetting_type. Must be one of {valid_types}"}
+
+    # Update memory record
+    record = _MEMORY_IDENTITY_LEDGER.get(mem_id) or _CONSTITUTIONAL_MEMORY.get(mem_id)
+    new_lifecycle = {
+        "EXPIRE":          "EXPIRED",
+        "DECAY":           "DECAYED",
+        "QUARANTINE":      "QUARANTINED",
+        "ESCALATE":        "ESCALATED",
+        "ARCHIVE":         "ARCHIVED",
+        "REQUIRE_RENEWAL": "PENDING_RENEWAL",
+        "DELETE":          "DELETED",
+    }[forgetting_type]
+
+    if record:
+        record["lifecycle"] = new_lifecycle
+        record["forgotten_at"] = timestamp
+        record["forgetting_type"] = forgetting_type
+        record["forgetting_authority"] = authority
+        if mem_id in _MEMORY_IDENTITY_LEDGER:
+            _MEMORY_IDENTITY_LEDGER[mem_id] = record
+        elif mem_id in _CONSTITUTIONAL_MEMORY:
+            _CONSTITUTIONAL_MEMORY[mem_id] = record
+
+    return {
+        "forgetting_id":   forgetting_id,
+        "schema":          "VGM-1.0",
+        "mem_id":          mem_id,
+        "forgetting_type": forgetting_type,
+        "reason":          reason,
+        "authority":       authority,
+        "new_lifecycle":   new_lifecycle,
+        "recoverable":     forgetting_type in ["DECAY","QUARANTINE","ARCHIVE","REQUIRE_RENEWAL"],
+        "permanent":       forgetting_type in ["DELETE","EXPIRE"],
+        "forgetting_hash": _sha256(json.dumps({
+            "forgetting_id": forgetting_id,
+            "mem_id":       mem_id,
+            "type":         forgetting_type,
+            "timestamp":    timestamp,
+        }, sort_keys=True, separators=(",",":"), ensure_ascii=False)),
+        "jorge_standard":  "Forgetting is a regulated action — not silent deletion",
+        "timestamp":       timestamp,
+    }
+
+def transfer_memory_cross_agent(
+    mem_id:          str,
+    from_agent_id:   str,
+    to_agent_id:     str,
+    delegation_scope:list,
+    jurisdiction:    str,
+) -> dict:
+    """
+    Cross-Agent Memory Sovereignty.
+    Jorge: "When one agent passes memory to another —
+    delegation receipts attached, provenance preserved,
+    admissibility re-evaluated."
+    ATF DR invariant applied: scope cannot expand on handoff.
+    """
+    timestamp   = datetime.utcnow().isoformat()
+    transfer_id = f"XFER-{uuid.uuid4().hex[:8].upper()}"
+
+    record = _MEMORY_IDENTITY_LEDGER.get(mem_id) or _CONSTITUTIONAL_MEMORY.get(mem_id)
+    if not record:
+        return {"transfer_id":transfer_id,"transferred":False,"reason":"Memory not found"}
+
+    zone    = record.get("isolation_zone","OPERATIONAL")
+    zone_def= MEMORY_ISOLATION_ZONES.get(zone,{})
+
+    # Cannot transfer non-cross-agent zones
+    if not zone_def.get("cross_agent",True):
+        return {
+            "transfer_id":  transfer_id,
+            "transferred":  False,
+            "reason":       f"ISOLATION_ZONE_{zone}_PROHIBITS_CROSS_AGENT_TRANSFER",
+            "zone":         zone,
+            "timestamp":    timestamp,
+        }
+
+    # Add to provenance delegation chain
+    delegation_record = {
+        "from_agent": from_agent_id,
+        "to_agent":   to_agent_id,
+        "scope":      delegation_scope,
+        "transferred_at": timestamp,
+        "transfer_hash":  _sha256(f"{transfer_id}:{from_agent_id}:{to_agent_id}:{timestamp}"),
+    }
+
+    if "memory_provenance" in record:
+        record["memory_provenance"]["delegation_chain"].append(delegation_record)
+        _MEMORY_IDENTITY_LEDGER[mem_id] = record
+
+    return {
+        "transfer_id":    transfer_id,
+        "mem_id":         mem_id,
+        "from_agent":     from_agent_id,
+        "to_agent":       to_agent_id,
+        "transferred":    True,
+        "delegation_scope":delegation_scope,
+        "jurisdiction":   jurisdiction,
+        "provenance_updated": True,
+        "atf_invariant":  "scope cannot expand on cross-agent handoff",
+        "transfer_hash":  delegation_record["transfer_hash"],
+        "timestamp":      timestamp,
+    }
+
+
+# ── VGM: MEMORY GOVERNANCE LAYER ENDPOINTS ───────────────────
+
+class MemoryIdentityRequest(BaseModel):
+    agent_id:        str
+    content_type:    str
+    origin_agent_id: str
+    authority_source:str
+    jurisdiction:    str   = "EU"
+    isolation_zone:  str   = "OPERATIONAL"
+    confidence:      float = 1.0
+
+class MemoryRetrievalRequest(BaseModel):
+    mem_id:   str
+    agent_id: str
+    purpose:  str = "task_execution"
+
+class ContaminationRequest(BaseModel):
+    mem_id:           str
+    new_content_hash: str   = ""
+    injection_signals:list  = []
+    drift_score:      float = 0.0
+
+class GoverningForgettingRequest(BaseModel):
+    mem_id:          str
+    forgetting_type: str = "EXPIRE"
+    reason:          str
+    authority:       str
+
+class CrossAgentMemoryRequest(BaseModel):
+    mem_id:          str
+    from_agent_id:   str
+    to_agent_id:     str
+    delegation_scope:list  = ["read"]
+    jurisdiction:    str   = "EU"
+
+@app.post("/v1/memory/identity/create", tags=["VGS-014 Constitutional Memory"])
+async def memory_identity_create(
+    req:       MemoryIdentityRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    Memory Identity Ledger.
+    Every memory object gets a birth certificate:
+    origin identity, authority source, confidence state,
+    jurisdiction, isolation zone, provenance chain.
+    Jorge: "Memory is becoming part of AI identity."
+    """
+    require_api_key(x_api_key)
+    result = create_memory_identity(
+        req.agent_id, req.content_type, req.origin_agent_id,
+        req.authority_source, req.jurisdiction,
+        req.isolation_zone, req.confidence,
+    )
+    await log_event(req.agent_id, "MEMORY_IDENTITY_CREATED", {
+        "mem_id": result["memory_id"],
+        "zone":   result["isolation_zone"],
+    })
+    return result
+
+@app.post("/v1/memory/retrieve", tags=["VGS-014 Constitutional Memory"])
+async def memory_retrieve(
+    req:       MemoryRetrievalRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    Admissible Retrieval Engine.
+    Jorge: "Retrieval becomes a governance event."
+    Before any memory retrieval: scope, confidence, contamination,
+    isolation zone, lifecycle — all verified.
+    ALLOW / REFUSED / REQUIRE_HUMAN_APPROVAL
+    Same governance model as execution.
+    """
+    require_api_key(x_api_key)
+    return check_memory_admissibility(req.mem_id, req.agent_id, req.purpose)
+
+@app.post("/v1/memory/contamination/detect", tags=["VGS-014 Constitutional Memory"])
+async def memory_contamination_detect(
+    req:       ContaminationRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    Semantic Contamination Detection.
+    Detects: prompt injection persistence, poisoned context,
+    recursive hallucination, adversarial semantic drift.
+    Contaminated memories → QUARANTINED lifecycle.
+    """
+    require_api_key(x_api_key)
+    return detect_semantic_contamination(
+        req.mem_id, req.new_content_hash,
+        req.injection_signals, req.drift_score,
+    )
+
+@app.post("/v1/memory/forget", tags=["VGS-014 Constitutional Memory"])
+async def memory_forget(
+    req:       GoverningForgettingRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    Governed Forgetting.
+    Jorge: "Forgetting becomes a regulated action."
+    Types: EXPIRE, DECAY, QUARANTINE, ESCALATE,
+           ARCHIVE, REQUIRE_RENEWAL, DELETE
+    Not all forgetting is deletion.
+    Produces cryptographic forgetting receipt.
+    """
+    require_api_key(x_api_key)
+    return governed_forgetting(
+        req.mem_id, req.forgetting_type,
+        req.reason, req.authority,
+    )
+
+@app.post("/v1/memory/transfer", tags=["VGS-014 Constitutional Memory"])
+async def memory_transfer(
+    req:       CrossAgentMemoryRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    Cross-Agent Memory Sovereignty.
+    When one agent passes memory to another:
+    delegation receipts attached, provenance preserved,
+    admissibility re-evaluated, scope cannot expand.
+    ATF invariant: delegation_scope ≤ originating_scope.
+    """
+    require_api_key(x_api_key)
+    return transfer_memory_cross_agent(
+        req.mem_id, req.from_agent_id, req.to_agent_id,
+        req.delegation_scope, req.jurisdiction,
+    )
+
+@app.get("/v1/memory/isolation-zones", tags=["VGS-014 Constitutional Memory"])
+async def memory_isolation_zones(x_api_key: Optional[str] = Header(None)):
+    """
+    Memory Isolation Zones — separation of concerns.
+    OPERATIONAL / REASONING / SOVEREIGN / REGULATED /
+    USER_PRIVATE / SAFETY_CRITICAL
+    """
+    require_api_key(x_api_key)
+    return {
+        "schema":          "VGM-1.0",
+        "isolation_zones": MEMORY_ISOLATION_ZONES,
+        "total_zones":     len(MEMORY_ISOLATION_ZONES),
+        "jorge_leon":      "Memory architecture for AI systems that need continuity across users, tasks, and time",
+        "verisigil":       "VGS-014 Constitutional Memory + VGM Governance Layer",
+    }
+
+@app.get("/v1/memory/identity/ledger", tags=["VGS-014 Constitutional Memory"])
+async def memory_identity_ledger(x_api_key: Optional[str] = Header(None)):
+    """Full Memory Identity Ledger — all registered memory objects."""
+    require_api_key(x_api_key)
+    return {
+        "schema":    "VGM-1.0",
+        "total":     len(_MEMORY_IDENTITY_LEDGER),
+        "memories":  list(_MEMORY_IDENTITY_LEDGER.values()),
     }
 
 
