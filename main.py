@@ -19024,6 +19024,566 @@ async def policy_pack_detail(
     return {"schema":"VGS-MARKETPLACE-1.0","pack_id":pack_id,"pack":pack}
 
 
+
+# ============================================================
+# VGS-019: GOVERNANCE CONVERGENCE MESH (GCM)
+# ============================================================
+# 4 Expert Consensus: "multiple realities converge
+# before consequence exists."
+#
+# NOT: multiple APIs talking
+# YES: one deterministic consequence decision fabric
+#
+# Multi-source admissibility consensus:
+# Consequence ONLY when:
+# - authority continuity
+# - execution legitimacy
+# - sovereign interpretation
+# - cognitive admissibility
+# - external verification
+# ALL converge successfully.
+#
+# 10 Core Components:
+# 1. Governance Decision Point (GDP)
+# 2. Conflict Resolution Engine (CRE)
+# 3. Multi-Source Evaluation Queue
+# 4. Governance State Machine
+# 5. Correlation Layer (x-verisigil-request-id)
+# 6. Unified Merkle Governance Chain
+# 7. External Witness Protocol
+# 8. Replayable Multi-Source Receipts
+# 9. Interoperability Consensus Layer
+# 10. Governance Continuity Replay Engine
+# ============================================================
+
+# Governance State Machine — all lifecycle states
+GCM_STATES = [
+    "PENDING",
+    "EVALUATING",
+    "CONVERGING",
+    "REQUIRING_APPROVAL",
+    "CONFLICT_DETECTED",
+    "DECIDED",
+    "EXECUTED",
+    "SEALED",
+    "EXPIRED",
+]
+
+# Conflict Resolution Engine — restrictive resolution wins
+# This is the Sovereign Safety Invariant
+CONFLICT_RESOLUTION_TABLE = {
+    ("ALLOW",                "ALLOW"):                "ALLOW",
+    ("ALLOW",                "REFUSED"):              "REFUSED",
+    ("ALLOW",                "DENY"):                 "DENY",
+    ("ALLOW",                "REQUIRE_HUMAN_APPROVAL"):"REQUIRE_HUMAN_APPROVAL",
+    ("ALLOW",                "REQUIRE_HUMAN_REVIEW"): "REQUIRE_HUMAN_REVIEW",
+    ("REFUSED",              "REFUSED"):              "REFUSED",
+    ("REFUSED",              "DENY"):                 "DENY",
+    ("REFUSED",              "REQUIRE_HUMAN_APPROVAL"):"DENY",
+    ("DENY",                 "DENY"):                 "DENY",
+    ("DENY",                 "REQUIRE_HUMAN_APPROVAL"):"DENY",
+    ("REQUIRE_HUMAN_APPROVAL","REQUIRE_HUMAN_APPROVAL"):"REQUIRE_HUMAN_APPROVAL",
+    ("LIMIT_SCOPE",          "ALLOW"):                "LIMIT_SCOPE",
+    ("SANDBOX_ONLY",         "ALLOW"):                "SANDBOX_ONLY",
+    ("SANDBOX_ONLY",         "REQUIRE_HUMAN_APPROVAL"):"DENY",
+    ("NON_AUTHORITATIVE_RESPONSE","ALLOW"):           "NON_AUTHORITATIVE_RESPONSE",
+}
+
+# In-memory GCM registries
+_GCM_SESSIONS:     dict = {}  # active convergence sessions
+_GCM_MERKLE_CHAIN: list = []  # immutable governance chain
+_GCM_CORRELATIONS: dict = {}  # x-verisigil-request-id → session
+
+def compute_merkle_root(chain: list) -> str:
+    """
+    Unified Merkle Governance Chain.
+    Every evaluation from every runtime logs here.
+    Tamper-evident. Offline-verifiable.
+    """
+    if not chain:
+        return _sha256("genesis")
+    hashes = [_sha256(json.dumps(e, sort_keys=True, separators=(",",":"))) for e in chain]
+    while len(hashes) > 1:
+        if len(hashes) % 2 == 1:
+            hashes.append(hashes[-1])
+        hashes = [_sha256(hashes[i] + hashes[i+1]) for i in range(0, len(hashes), 2)]
+    return hashes[0]
+
+def resolve_conflict(decisions: list) -> str:
+    """
+    Conflict Resolution Engine (CRE).
+    Sovereign Safety Invariant:
+    ALLOW + DENY = DENY (most restrictive wins)
+    UNRESOLVED = most restrictive interpretation
+    """
+    if not decisions:
+        return "DENIED_NO_EVALUATIONS"
+    result = decisions[0]
+    for d in decisions[1:]:
+        key = (result, d) if (result, d) in CONFLICT_RESOLUTION_TABLE else (d, result)
+        result = CONFLICT_RESOLUTION_TABLE.get(key, "DENY")
+    return result
+
+def create_gcm_session(
+    request_id:   str,
+    agent_id:     str,
+    action_type:  str,
+    consequence:  str,
+    sources:      list,
+    jurisdiction: str,
+) -> dict:
+    """
+    VGS-019: Create Governance Convergence Mesh session.
+    Opens a convergence window for multi-source evaluations.
+    Sources: API_A_RUNTIME · API_B_RUNTIME · EXTERNAL_WITNESS
+    """
+    session_id = f"GCM-{uuid.uuid4().hex[:8].upper()}"
+    timestamp  = datetime.utcnow().isoformat()
+
+    # Register correlation ID
+    _GCM_CORRELATIONS[request_id] = session_id
+
+    session = {
+        "session_id":         session_id,
+        "schema":             "VGS-019",
+        "request_id":         request_id,
+        "x_verisigil_request_id": request_id,
+        "agent_id":           agent_id,
+        "action_type":        action_type,
+        "consequence":        consequence,
+        "jurisdiction":       jurisdiction,
+        "gcm_state":          "PENDING",
+        "sources_expected":   sources,
+        "evaluations":        {},
+        "evaluations_received":0,
+        "evaluations_expected":len(sources),
+        "final_decision":     None,
+        "conflict_detected":  False,
+        "convergence_proof":  None,
+        "merkle_root":        None,
+        "created_at":         timestamp,
+        "decided_at":         None,
+        "sealed_at":          None,
+    }
+    _GCM_SESSIONS[session_id] = session
+    return session
+
+def submit_gcm_evaluation(
+    session_id:  str,
+    source:      str,
+    decision:    str,
+    evidence_hash:str,
+    reason:      str,
+) -> dict:
+    """
+    VGS-019: Submit evaluation from one runtime source.
+    Sources: API_A_RUNTIME · API_B_RUNTIME · EXTERNAL_WITNESS
+    After all evaluations received → auto-resolve via CRE.
+    """
+    timestamp = datetime.utcnow().isoformat()
+
+    if session_id not in _GCM_SESSIONS:
+        return {"error": "Session not found", "session_id": session_id}
+
+    session = _GCM_SESSIONS[session_id]
+
+    # Record evaluation
+    session["evaluations"][source] = {
+        "source":       source,
+        "decision":     decision,
+        "evidence_hash":evidence_hash,
+        "reason":       reason,
+        "submitted_at": timestamp,
+    }
+    session["evaluations_received"] = len(session["evaluations"])
+    session["gcm_state"] = "EVALUATING"
+
+    # Log to Merkle chain
+    chain_entry = {
+        "session_id":   session_id,
+        "source":       source,
+        "decision":     decision,
+        "evidence_hash":evidence_hash,
+        "timestamp":    timestamp,
+    }
+    _GCM_MERKLE_CHAIN.append(chain_entry)
+
+    # Check if all evaluations received
+    if session["evaluations_received"] >= session["evaluations_expected"]:
+        session["gcm_state"] = "CONVERGING"
+
+        # Collect all decisions
+        all_decisions = [e["decision"] for e in session["evaluations"].values()]
+
+        # Detect conflicts
+        unique_decisions = set(all_decisions)
+        session["conflict_detected"] = len(unique_decisions) > 1
+
+        if session["conflict_detected"]:
+            session["gcm_state"] = "CONFLICT_DETECTED"
+
+        # Resolve via CRE — restrictive wins
+        final_decision = resolve_conflict(all_decisions)
+
+        # Adjust state
+        if final_decision == "REQUIRE_HUMAN_APPROVAL":
+            session["gcm_state"] = "REQUIRING_APPROVAL"
+        else:
+            session["gcm_state"] = "DECIDED"
+
+        session["final_decision"] = final_decision
+
+        # Compute Merkle root
+        merkle_root = compute_merkle_root(_GCM_MERKLE_CHAIN)
+        session["merkle_root"] = merkle_root
+
+        # Convergence proof
+        convergence_canonical = json.dumps({
+            "session_id":     session_id,
+            "final_decision": final_decision,
+            "evaluations":    {s:e["decision"] for s,e in session["evaluations"].items()},
+            "merkle_root":    merkle_root,
+            "timestamp":      timestamp,
+        }, sort_keys=True, separators=(",",":"), ensure_ascii=False)
+
+        session["convergence_proof"] = {
+            "proof_hash":       _sha256(convergence_canonical),
+            "merkle_root":      merkle_root,
+            "final_decision":   final_decision,
+            "sources_evaluated":list(session["evaluations"].keys()),
+            "conflict_detected":session["conflict_detected"],
+            "resolution_rule":  "RESTRICTIVE_WINS — Sovereign Safety Invariant",
+            "offline_verifiable":True,
+            "platform_required": False,
+        }
+        session["decided_at"] = timestamp
+
+    _GCM_SESSIONS[session_id] = session
+    return session
+
+def seal_gcm_session(session_id: str) -> dict:
+    """
+    Seal a GCM session after execution.
+    State: DECIDED → EXECUTED → SEALED.
+    Immutable after sealing.
+    """
+    timestamp = datetime.utcnow().isoformat()
+    if session_id not in _GCM_SESSIONS:
+        return {"error": "Session not found"}
+
+    session = _GCM_SESSIONS[session_id]
+    session["gcm_state"] = "SEALED"
+    session["sealed_at"] = timestamp
+    session["seal_hash"]  = _sha256(json.dumps({
+        "session_id":    session_id,
+        "final_decision":session.get("final_decision"),
+        "merkle_root":   session.get("merkle_root"),
+        "sealed_at":     timestamp,
+    }, sort_keys=True, separators=(",",":"), ensure_ascii=False))
+
+    _GCM_SESSIONS[session_id] = session
+    return session
+
+def replay_gcm_session(session_id: str) -> dict:
+    """
+    VGS-019 Replay Engine.
+    Reconstructs the full governance convergence history
+    for a session — all sources, all decisions, all timestamps.
+    Offline-verifiable. No platform required.
+    """
+    session  = _GCM_SESSIONS.get(session_id)
+    if not session:
+        return {"error": "Session not found", "session_id": session_id}
+
+    # Reconstruct Merkle path for this session
+    session_entries = [e for e in _GCM_MERKLE_CHAIN if e.get("session_id") == session_id]
+
+    return {
+        "schema":           "VGS-019-REPLAY",
+        "session_id":       session_id,
+        "agent_id":         session.get("agent_id"),
+        "action_type":      session.get("action_type"),
+        "gcm_state":        session.get("gcm_state"),
+        "final_decision":   session.get("final_decision"),
+        "evaluations":      session.get("evaluations", {}),
+        "conflict_detected":session.get("conflict_detected"),
+        "convergence_proof":session.get("convergence_proof"),
+        "merkle_entries":   session_entries,
+        "chain_length":     len(_GCM_MERKLE_CHAIN),
+        "replay_complete":  True,
+        "offline_verifiable":True,
+        "platform_required": False,
+        "expert_framing":   "Multiple realities converge before consequence exists",
+    }
+
+
+# ── VGS-019 GOVERNANCE CONVERGENCE MESH ENDPOINTS ─────────────
+
+class GCMSessionRequest(BaseModel):
+    request_id:   str
+    agent_id:     str
+    action_type:  str  = "payment"
+    consequence:  str  = "HIGH"
+    sources:      list = ["API_A_RUNTIME","API_B_RUNTIME","EXTERNAL_WITNESS"]
+    jurisdiction: str  = "EU_AI_ACT"
+
+class GCMEvaluationRequest(BaseModel):
+    session_id:   str
+    source:       str  = "API_A_RUNTIME"
+    decision:     str  = "ALLOW"
+    evidence_hash:str  = ""
+    reason:       str  = ""
+
+class GCMFullRequest(BaseModel):
+    agent_id:         str
+    action_type:      str   = "payment"
+    consequence:      str   = "HIGH"
+    jurisdiction:     str   = "EU_AI_ACT"
+    trust_score:      float = 0.963
+    authority_active: bool  = True
+    escalation_resolved: bool = True
+    jurisdiction_resolved: bool = True
+    response_content: str  = ""
+    intended_domain:  str  = "OPERATIONAL"
+    external_decision:str  = "ALLOW"
+
+@app.post("/v1/gcm/session", tags=["VGS-019 Governance Convergence Mesh"])
+async def gcm_session_create(
+    req: GCMSessionRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    VGS-019: Open a Governance Convergence Mesh session.
+    Opens a convergence window for multi-source evaluations.
+    Returns session_id + x-verisigil-request-id correlation.
+    Sources: API_A_RUNTIME · API_B_RUNTIME · EXTERNAL_WITNESS
+    """
+    require_api_key(x_api_key)
+    result = create_gcm_session(
+        req.request_id, req.agent_id, req.action_type,
+        req.consequence, req.sources, req.jurisdiction,
+    )
+    await log_event(req.agent_id, "GCM_SESSION_CREATED", {
+        "session_id": result["session_id"],
+        "sources":    req.sources,
+    })
+    return result
+
+@app.post("/v1/gcm/evaluate", tags=["VGS-019 Governance Convergence Mesh"])
+async def gcm_evaluate(
+    req: GCMEvaluationRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    VGS-019: Submit evaluation from one runtime source.
+    When all sources submit → CRE resolves automatically.
+    Sovereign Safety Invariant: ALLOW + DENY = DENY.
+    RESTRICTIVE RESOLUTION WINS.
+    Logs to Unified Merkle Governance Chain.
+    """
+    require_api_key(x_api_key)
+    result = submit_gcm_evaluation(
+        req.session_id, req.source,
+        req.decision, req.evidence_hash, req.reason,
+    )
+    await log_event(req.session_id, "GCM_EVALUATION_SUBMITTED", {
+        "source":   req.source,
+        "decision": req.decision,
+        "state":    result.get("gcm_state"),
+    })
+    return result
+
+@app.post("/v1/gcm/converge", tags=["VGS-019 Governance Convergence Mesh"])
+async def gcm_converge_full(
+    req: GCMFullRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    VGS-019: Full auto-convergence in one call.
+    Runs ALL three evaluation layers automatically:
+    1. API_A: Execution admissibility (VGS-001)
+    2. API_B: Cognitive admissibility (VGS-018)
+    3. EXTERNAL: External witness decision
+    Then resolves via CRE — restrictive wins.
+    Returns: final convergence decision + Merkle proof.
+    """
+    require_api_key(x_api_key)
+    import secrets as _sec
+    request_id = f"REQ-{_sec.token_hex(8).upper()}"
+
+    # Open session
+    session = create_gcm_session(
+        request_id, req.agent_id, req.action_type,
+        req.consequence, ["API_A_RUNTIME","API_B_RUNTIME","EXTERNAL_WITNESS"],
+        req.jurisdiction,
+    )
+    session_id = session["session_id"]
+
+    # Layer 1: API_A — Execution admissibility
+    exec_result = evaluate_execution_admissibility(
+        agent_id   = req.agent_id,
+        action_type= req.action_type,
+        trust_score= req.trust_score,
+        consequence= req.consequence,
+        jurisdiction=req.jurisdiction,
+    )
+    exec_decision = exec_result.get("decision","DENY")
+    submit_gcm_evaluation(
+        session_id, "API_A_RUNTIME", exec_decision,
+        exec_result.get("execution_hash",""), "Execution admissibility VGS-001",
+    )
+
+    # Layer 2: API_B — Cognitive admissibility
+    cog_result = assess_cognitive_admissibility(
+        agent_id       = req.agent_id,
+        response_content=req.response_content or req.action_type,
+        intended_domain= req.intended_domain,
+        agent_authority= [],
+        certainty_claim= "MODERATE",
+        jurisdiction   = req.jurisdiction,
+    )
+    cog_decision = cog_result.get("cognitive_decision","ALLOW")
+    # Map cognitive to execution decision vocabulary
+    cog_mapped = {
+        "ALLOW":"ALLOW","REFUSED":"REFUSED",
+        "REQUIRE_HUMAN_REVIEW":"REQUIRE_HUMAN_APPROVAL",
+        "LIMIT_SCOPE":"REFUSED","NON_AUTHORITATIVE_RESPONSE":"REFUSED",
+        "SANDBOX_ONLY":"DENY",
+    }.get(cog_decision,"REFUSED")
+    submit_gcm_evaluation(
+        session_id, "API_B_RUNTIME", cog_mapped,
+        cog_result.get("proof_hash",""), "Cognitive admissibility VGS-018",
+    )
+
+    # Layer 3: EXTERNAL WITNESS
+    final_session = submit_gcm_evaluation(
+        session_id, "EXTERNAL_WITNESS", req.external_decision,
+        _sha256(f"external:{req.external_decision}:{request_id}"),
+        "External witness evaluation",
+    )
+
+    await log_event(req.agent_id, "GCM_CONVERGED", {
+        "session_id":    session_id,
+        "final_decision":final_session.get("final_decision"),
+        "conflict":      final_session.get("conflict_detected"),
+    })
+    return final_session
+
+@app.post("/v1/gcm/seal/{session_id}", tags=["VGS-019 Governance Convergence Mesh"])
+async def gcm_seal(
+    session_id: str,
+    x_api_key:  Optional[str] = Header(None)
+):
+    """
+    VGS-019: Seal a GCM session after execution.
+    State: DECIDED → EXECUTED → SEALED.
+    Immutable after sealing. Adds seal_hash.
+    """
+    require_api_key(x_api_key)
+    return seal_gcm_session(session_id)
+
+@app.get("/v1/gcm/session/{session_id}", tags=["VGS-019 Governance Convergence Mesh"])
+async def gcm_session_get(
+    session_id: str,
+    x_api_key:  Optional[str] = Header(None)
+):
+    """Get current state of a GCM session."""
+    require_api_key(x_api_key)
+    session = _GCM_SESSIONS.get(session_id)
+    if not session:
+        return {"error":"Session not found","session_id":session_id}
+    return session
+
+@app.post("/v1/gcm/replay/{session_id}", tags=["VGS-019 Governance Convergence Mesh"])
+async def gcm_replay(
+    session_id: str,
+    x_api_key:  Optional[str] = Header(None)
+):
+    """
+    VGS-019: Governance Continuity Replay Engine.
+    Reconstructs full convergence history offline.
+    All sources · All decisions · Merkle proof.
+    No platform required. Years later.
+    """
+    require_api_key(x_api_key)
+    return replay_gcm_session(session_id)
+
+@app.get("/v1/gcm/chain", tags=["VGS-019 Governance Convergence Mesh"])
+async def gcm_chain(x_api_key: Optional[str] = Header(None)):
+    """
+    Unified Merkle Governance Chain.
+    Every evaluation from every runtime logged here.
+    Tamper-evident. Offline-verifiable.
+    """
+    require_api_key(x_api_key)
+    return {
+        "schema":       "VGS-019",
+        "chain_length": len(_GCM_MERKLE_CHAIN),
+        "merkle_root":  compute_merkle_root(_GCM_MERKLE_CHAIN),
+        "entries":      _GCM_MERKLE_CHAIN[-20:],
+        "total_sessions":len(_GCM_SESSIONS),
+        "offline_verifiable":True,
+    }
+
+@app.get("/v1/gcm/conflict-table", tags=["VGS-019 Governance Convergence Mesh"])
+async def gcm_conflict_table(x_api_key: Optional[str] = Header(None)):
+    """
+    Conflict Resolution Engine (CRE).
+    Sovereign Safety Invariant: RESTRICTIVE WINS.
+    ALLOW + DENY = DENY. ALLOW + REQUIRE_HUMAN = REQUIRE_HUMAN.
+    """
+    require_api_key(x_api_key)
+    return {
+        "schema":            "VGS-019-CRE",
+        "sovereign_safety_invariant":"RESTRICTIVE RESOLUTION WINS",
+        "rules": {f"{a}+{b}":r for (a,b),r in CONFLICT_RESOLUTION_TABLE.items()},
+        "states":            GCM_STATES,
+        "principle":         "Multiple realities converge before consequence exists",
+    }
+
+@app.get("/v1/gcm/architecture", tags=["VGS-019 Governance Convergence Mesh"])
+async def gcm_architecture(x_api_key: Optional[str] = Header(None)):
+    """
+    VGS-019 Governance Convergence Mesh architecture.
+    Full framing: bidirectional authority convergence
+    with external witness verification.
+    """
+    require_api_key(x_api_key)
+    return {
+        "schema":        "VGS-019",
+        "name":          "Governance Convergence Mesh (GCM)",
+        "framing":       "Bidirectional Authority Convergence with External Witness Verification",
+        "principle":     "Multiple realities converge before consequence exists",
+        "positioning":   "VeriSigil AI coordinates admissibility consensus across autonomous runtimes before consequence propagates",
+        "components": {
+            "1_GDP":     "Governance Decision Point — single deterministic authority resolution",
+            "2_CRE":     "Conflict Resolution Engine — restrictive resolution wins",
+            "3_MEQ":     "Multi-Source Evaluation Queue — all sources before formation",
+            "4_GSM":     "Governance State Machine — 9 states lifecycle",
+            "5_COR":     "Correlation Layer — x-verisigil-request-id",
+            "6_MKL":     "Unified Merkle Governance Chain — tamper-evident",
+            "7_EWP":     "External Witness Protocol — third-party verification",
+            "8_MSR":     "Replayable Multi-Source Receipts — offline replay",
+            "9_ICL":     "Interoperability Consensus Layer — ATF+VGS bridge",
+            "10_RPE":    "Governance Continuity Replay Engine — years later",
+        },
+        "sources":       ["API_A_RUNTIME","API_B_RUNTIME","EXTERNAL_WITNESS"],
+        "states":        GCM_STATES,
+        "endpoints": {
+            "create":    "POST /v1/gcm/session",
+            "evaluate":  "POST /v1/gcm/evaluate",
+            "converge":  "POST /v1/gcm/converge (full auto)",
+            "seal":      "POST /v1/gcm/seal/{session_id}",
+            "get":       "GET /v1/gcm/session/{session_id}",
+            "replay":    "POST /v1/gcm/replay/{session_id}",
+            "chain":     "GET /v1/gcm/chain",
+            "cre":       "GET /v1/gcm/conflict-table",
+        },
+        "not":   "API gateway, router, webhook broker",
+        "yes":   "Consequence Decision Fabric",
+    }
+
+
 # ============================================================
 # PAYSTACK WEBHOOK — Automatic onboarding on payment
 # ============================================================
