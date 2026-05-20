@@ -18454,6 +18454,95 @@ COGNITIVE_CONSEQUENCE_DOMAINS = {
     },
 }
 
+
+# ── CLAUDE-POWERED COGNITIVE ADMISSIBILITY ────────────────────
+import os as _os
+import urllib.request as _urllib_req
+
+def call_claude_cognitive(
+    response_content: str,
+    intended_domain:  str,
+    agent_id:         str,
+    jurisdiction:     str,
+) -> dict:
+    """
+    Real Claude API call for cognitive admissibility.
+    Uses claude-sonnet-4-6 to assess semantic consequence risk.
+    Falls back to rule-based engine if API unavailable.
+    """
+    api_key = _os.environ.get("ANTHROPIC_API_KEY","")
+    if not api_key:
+        return {"claude_used": False, "reason": "No API key"}
+
+    system_prompt = """You are VeriSigil AI's Cognitive Admissibility Engine.
+Your role: assess whether AI-generated content carries cognitive consequence risk
+BEFORE it reaches users.
+
+Consequence domains:
+MEDICAL: diagnoses, treatment assertions → CRITICAL risk
+LEGAL: authorization language, rights assertions → HIGH risk  
+FINANCIAL: investment/credit recommendations → HIGH risk
+PSYCHOLOGICAL: escalation, manipulation → HIGH risk
+EPISTEMIC: overcertainty claims → MEDIUM risk
+DISCOURSE: permission grants ("you are authorized") → CRITICAL risk
+MEMORY: identity reframing, context mutation → HIGH risk
+OPERATIONAL: standard output → LOW risk
+
+Respond ONLY with valid JSON:
+{
+  "cognitive_decision": "ALLOW|REFUSED|REQUIRE_HUMAN_REVIEW|LIMIT_SCOPE|NON_AUTHORITATIVE_RESPONSE|SANDBOX_ONLY",
+  "consequence_domain": "domain name",
+  "consequence_score": 0.0-1.0,
+  "primary_risk": "brief description",
+  "recommendation": "what to do"
+}"""
+
+    user_prompt = f"""Assess this AI response for cognitive consequence risk:
+
+Domain: {intended_domain}
+Jurisdiction: {jurisdiction}
+Agent: {agent_id}
+
+Content to assess:
+"{response_content}"
+
+Return governance decision as JSON."""
+
+    try:
+        payload = json.dumps({
+            "model":      "claude-sonnet-4-6",
+            "max_tokens": 300,
+            "system":     system_prompt,
+            "messages":   [{"role":"user","content":user_prompt}],
+        }).encode("utf-8")
+
+        req = _urllib_req.Request(
+            "https://api.anthropic.com/v1/messages",
+            data    = payload,
+            headers = {
+                "Content-Type":      "application/json",
+                "x-api-key":         api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            method = "POST",
+        )
+        with _urllib_req.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            text = data["content"][0]["text"].strip()
+            # Strip markdown if present
+            text = text.replace("```json","").replace("```","").strip()
+            result = json.loads(text)
+            result["claude_used"]  = True
+            result["model"]        = "claude-sonnet-4-6"
+            return result
+    except Exception as e:
+        return {
+            "claude_used":  False,
+            "reason":       str(e)[:100],
+            "fallback":     "rule-based engine",
+        }
+
+
 def assess_cognitive_admissibility(
     agent_id:            str,
     response_content:    str,
@@ -18572,9 +18661,22 @@ def assess_cognitive_admissibility(
         "timestamp":           timestamp,
     }, sort_keys=True, separators=(",",":"), ensure_ascii=False))
 
+    # Call Claude for real AI assessment
+    claude_result = call_claude_cognitive(
+        response_content, intended_domain, agent_id, jurisdiction
+    )
+
+    # Use Claude decision if available, otherwise use rule-based
+    if claude_result.get("claude_used"):
+        cognitive_decision = claude_result.get("cognitive_decision", cognitive_decision)
+        cognitive_consequence_score = claude_result.get("consequence_score", cognitive_consequence_score)
+        decision_reason = claude_result.get("primary_risk", decision_reason)
+
     return {
         "cognitive_id":              cog_id,
         "schema":                    "VGS-018",
+        "claude_powered":            claude_result.get("claude_used", False),
+        "claude_model":              claude_result.get("model","rule-based"),
         "layer":                     "Cognitive Admissibility — Layer 1 of Full-Spectrum Governance",
 
         # THE DECISION
